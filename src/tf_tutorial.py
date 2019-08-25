@@ -5,7 +5,7 @@ import numpy as np
 
 # fashion_mnist = keras.datasets.fashion_mnist
 # (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
-# 
+#
 # model = keras.Sequential([
 #     keras.layers.Flatten(input_shape=(28, 28)),
 #     keras.layers.Dense(128, activation=tf.nn.relu),
@@ -49,7 +49,6 @@ class Model:
         self._optimizer = tf.train.AdamOptimizer().minimize(loss)
         self._var_init = tf.global_variables_initializer()
 
-
     def predict_one(self, state, sess):
         return sess.run(self._logits, feed_dict={self._states: state.reshape(1, self._num_states)})
 
@@ -75,3 +74,61 @@ class Memory:
             return random.sample(self._samples, len(self._samples))
         else:
             return random.sample(self._samples, no_samples)
+
+
+class GameRunner:
+    def __init__(self, sess, model, env, memory, max_eps, min_eps, decay, render=True):
+        self.sess = sess
+        self._env = env
+        self._model = model
+        self._memory = memory
+        self._render = render
+        self._max_eps = max_eps
+        self._min_eps = min_eps
+        self._decay = decay
+        self._steps = 0
+        self._reward_store = []
+        self._max_x_store = []
+
+    def run(self):
+        state = self._env.reset()
+        tot_reward = 0
+        max_x = -100
+        while True:
+            if self._render:
+                self._env.render()
+
+            action = self._choose_action(state)
+            next_state, reward, done, info = self._env.step(action)
+            if next_state[0] >= 0.1:
+                reward += 10
+            elif next_state[0] >= 0.25:
+                reward += 20
+            elif next_state[0] >= 0.5:
+                reward += 100
+
+            if next_state[0] > max_x:
+                max_x = next_state[0]
+            # is the game complete? If so, set the next state to
+            # None for storage sake
+            if done:
+                next_state = None
+
+            self._memory.add_sample((state, action, reward, next_state))
+            self._replay()
+            # exponentially decay the eps value
+            self._steps += 1
+            self._eps = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) \
+                                        * math.exp(-LAMBDA * self._steps)
+            # move the agent to the next state and accumulate the reward
+            state = next_state
+            tot_reward += reward
+
+            # if the game is done, break the loop
+            if done:
+                self._reward_store.append(tot_reward)
+                self._max_x_store.append(max_x)
+                break
+
+        print("Step {}, Total reward: {}, Eps: {}".format(self._steps, tot_reward, self._eps))
+
