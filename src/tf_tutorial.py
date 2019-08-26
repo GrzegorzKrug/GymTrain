@@ -171,9 +171,9 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 20000
+    BATCH_SIZE = 200
     MIN_EPSILON = 1e-5
-    MAX_EPSILON = 1
+    MAX_EPSILON = 3
     LAMBDA = 1e-4
 
     env_name = 'MountainCar-v0'
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     num_actions = env.env.action_space.n
 
     model = Model(num_states, num_actions, BATCH_SIZE)
-    mem = Memory(50000)
+    mem = Memory(5*1e4)
 
     with tf.Session() as sess:
         sess.run(model._var_init)
