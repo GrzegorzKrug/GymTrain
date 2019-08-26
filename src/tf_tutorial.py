@@ -1,7 +1,9 @@
 import tensorflow as tf
 import random
 from tensorflow import keras
+import gym
 import numpy as np
+import math
 
 # fashion_mnist = keras.datasets.fashion_mnist
 # (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
@@ -78,13 +80,14 @@ class Memory:
 
 class GameRunner:
     def __init__(self, sess, model, env, memory, max_eps, min_eps, decay, render=True):
-        self.sess = sess
+        self._sess = sess
         self._env = env
         self._model = model
         self._memory = memory
         self._render = render
         self._max_eps = max_eps
         self._min_eps = min_eps
+        self._eps = self._max_eps
         self._decay = decay
         self._steps = 0
         self._reward_store = []
@@ -132,3 +135,69 @@ class GameRunner:
 
         print("Step {}, Total reward: {}, Eps: {}".format(self._steps, tot_reward, self._eps))
 
+    def _choose_action(self, state):
+        if random.random() < self._eps:
+            return random.randint(0, self._model._num_actions - 1)
+        else:
+            return np.argmax(self._model.predict_one(state, self._sess))
+
+    def _replay(self):
+        GAMMA = -5
+        batch = self._memory.sample(self._model._batch_size)
+        states = np.array([val[0] for val in batch])
+        next_states = np.array([(np.zeros(self._model._num_states)
+                                 if val[3] is None else val[3]) for val in batch])
+        # predict Q(s,a) given the batch of states
+        q_s_a = self._model.predict_batch(states, self._sess)
+        # predict Q(s',a') - so that we can do gamma * max(Q(s'a')) below
+        q_s_a_d = self._model.predict_batch(next_states, self._sess)
+        # setup training arrays
+        x = np.zeros((len(batch), self._model._num_states))
+        y = np.zeros((len(batch), self._model._num_actions))
+        for i, b in enumerate(batch):
+            state, action, reward, next_state = b[0], b[1], b[2], b[3]
+            # get the current q values for all actions in state
+            current_q = q_s_a[i]
+            # update the q value for action
+            if next_state is None:
+                # in this case, the game completed after action, so there is no max Q(s',a')
+                # prediction possible
+                current_q[action] = reward
+            else:
+                current_q[action] = reward + GAMMA * np.amax(q_s_a_d[i])
+            x[i] = state
+            y[i] = current_q
+        self._model.train_batch(self._sess, x, y)
+
+
+if __name__ == "__main__":
+    BATCH_SIZE = 20000
+    MIN_EPSILON = 1e-5
+    MAX_EPSILON = 1
+    LAMBDA = 1e-4
+
+    env_name = 'MountainCar-v0'
+    env = gym.make(env_name)
+
+    num_states = env.env.observation_space.shape[0]
+    num_actions = env.env.action_space.n
+
+    model = Model(num_states, num_actions, BATCH_SIZE)
+    mem = Memory(50000)
+
+    with tf.Session() as sess:
+        sess.run(model._var_init)
+        gr = GameRunner(sess, model, env, mem, MAX_EPSILON, MIN_EPSILON,
+                        LAMBDA)
+        num_episodes = 300
+        cnt = 0
+        while cnt < num_episodes:
+            if cnt % 10 == 0:
+                print('Episode {} of {}'.format(cnt+1, num_episodes))
+            gr.run()
+            cnt += 1
+        plt.plot(gr.reward_store)
+        plt.show()
+        plt.close("all")
+        plt.plot(gr.max_x_store)
+        plt.show()
