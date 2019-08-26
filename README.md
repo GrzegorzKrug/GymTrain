@@ -1,13 +1,13 @@
-# GymTrain
+# Readme - GymTrain
 
 #### Tensorflow
-Bacis reinforced problems
+Basic reinforced problems
 
 ## Cart Pole
-- [ ]
+- [ ] learn agent
 
 ## Mountain Car game
-- [ ]
+- [ ] learn agent
 
 # Next ?
 
