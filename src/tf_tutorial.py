@@ -71,11 +71,12 @@ class Memory:
         if len(self._samples) > self._max_memory:
             self._samples.pop(0)
 
-    def sample(self, no_samples):
-        if no_samples > len(self._samples):
+    def sample(self, batch_size):
+        # It always returns random sample... why? |GK
+        if batch_size > len(self._samples):
             return random.sample(self._samples, len(self._samples))
         else:
-            return random.sample(self._samples, no_samples)
+            return random.sample(self._samples, batch_size)
 
 
 class GameRunner:
@@ -142,7 +143,7 @@ class GameRunner:
             return np.argmax(self._model.predict_one(state, self._sess))
 
     def _replay(self):
-        GAMMA = -5
+        GAMMA = 0.12
         batch = self._memory.sample(self._model._batch_size)
         states = np.array([val[0] for val in batch])
         next_states = np.array([(np.zeros(self._model._num_states)
@@ -171,10 +172,10 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 200
-    MIN_EPSILON = 0.2
-    MAX_EPSILON = 0.7
-    LAMBDA = 1e-4
+    BATCH_SIZE = 30
+    MIN_EPSILON = 0.05
+    MAX_EPSILON = 0.9
+    LAMBDA = 1e-3
 
     env_name = 'MountainCar-v0'
     env = gym.make(env_name)
