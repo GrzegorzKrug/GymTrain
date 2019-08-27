@@ -171,8 +171,8 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 5
-    MIN_EPSILON = 1e-5
+    BATCH_SIZE = 200
+    MIN_EPSILON = 0.2
     MAX_EPSILON = 0.7
     LAMBDA = 1e-4
 
