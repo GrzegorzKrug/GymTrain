@@ -4,10 +4,14 @@
 Basic reinforced problems
 
 ## Cart Pole
-- [ ] learn agent
+- [ ] learn agent to play game
 
 ## Mountain Car game
-- [ ] learn agent
+- [ ] learn agent to play game
 
-# Next ?
+## Snake
+- [ ] learn agent to play game
 
+# Next
+	? R-Learning
+	? Q(λ)-Learing ? 
