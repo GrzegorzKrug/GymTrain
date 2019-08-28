@@ -148,6 +148,7 @@ class GameRunner:
         states = np.array([val[0] for val in batch])
         next_states = np.array([(np.zeros(self._model._num_states)
                                  if val[3] is None else val[3]) for val in batch])
+
         # predict Q(s,a) given the batch of states
         q_s_a = self._model.predict_batch(states, self._sess)
         # predict Q(s',a') - so that we can do gamma * max(Q(s'a')) below
@@ -172,10 +173,10 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 30
+    BATCH_SIZE = 10000
     MIN_EPSILON = 0.05
-    MAX_EPSILON = 0.9
-    LAMBDA = 1e-3
+    MAX_EPSILON = 0.8
+    LAMBDA = 1e-4
 
     env_name = 'MountainCar-v0'
     env = gym.make(env_name)
