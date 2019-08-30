@@ -4,6 +4,7 @@ from tensorflow import keras
 import gym
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 # fashion_mnist = keras.datasets.fashion_mnist
 # (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
@@ -25,7 +26,7 @@ import math
 #     print('Test accuracy: {}'.format(test_acc))
 
 
-class Model:
+class NNModel:
     def __init__(self, num_states, num_actions, batch_size):
         self._num_states = num_states
         self._num_actions = num_actions
@@ -173,33 +174,32 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 10000
+    BATCH_SIZE = 1000
     MIN_EPSILON = 0.05
     MAX_EPSILON = 0.8
-    LAMBDA = 1e-4
+    LAMBDA = 25e-4
 
     env_name = 'MountainCar-v0'
     env = gym.make(env_name)
 
-    num_states = env.env.observation_space.shape[0]
-    num_actions = env.env.action_space.n
+    num_states = env.observation_space.shape[0]
+    num_actions = env.action_space.n
 
-    model = Model(num_states, num_actions, BATCH_SIZE)
+    model = NNModel(num_states, num_actions, BATCH_SIZE)
     mem = Memory(5e4)
 
     with tf.Session() as sess:
         sess.run(model._var_init)
-        gr = GameRunner(sess, model, env, mem, MAX_EPSILON, MIN_EPSILON,
-                        LAMBDA)
-        num_episodes = 300
+        gr = GameRunner(sess, model, env, mem, MAX_EPSILON, MIN_EPSILON, LAMBDA)
+        num_episodes = 100
         cnt = 0
         while cnt < num_episodes:
             if cnt % 10 == 0:
                 print('Episode {} of {}'.format(cnt+1, num_episodes))
             gr.run()
             cnt += 1
-        plt.plot(gr.reward_store)
+        plt.plot(gr._reward_store)
         plt.show()
         plt.close("all")
-        plt.plot(gr.max_x_store)
+        plt.plot(gr._max_x_store)
         plt.show()
