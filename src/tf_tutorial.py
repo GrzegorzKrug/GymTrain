@@ -105,12 +105,23 @@ class GameRunner:
 
             action = self._choose_action(state)
             next_state, reward, done, info = self._env.step(action)
-            if next_state[0] >= 0.1:
-                reward += 10
+
+            if not (reward is None):
+                reward *= 2
+
+            if next_state[0] >= 0.5:
+                reward += 100
             elif next_state[0] >= 0.25:
                 reward += 20
-            elif next_state[0] >= 0.5:
-                reward += 100
+            elif next_state[0] >= 0.1:
+                reward += 10
+
+            # if next_state[1] > 0.1:
+            #     reward += 3
+            # elif abs(next_state[1]) > 0.08:
+            #     reward += .6
+            if abs(next_state[1]) > 0.01:
+                reward += .2
 
             if next_state[0] > max_x:
                 max_x = next_state[0]
@@ -174,10 +185,10 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 1000
-    MIN_EPSILON = 0.05
-    MAX_EPSILON = 0.8
-    LAMBDA = 25e-4
+    BATCH_SIZE = 200
+    MIN_EPSILON = 0.01
+    MAX_EPSILON = 0.5
+    LAMBDA = 9e-4
 
     env_name = 'MountainCar-v0'
     env = gym.make(env_name)
