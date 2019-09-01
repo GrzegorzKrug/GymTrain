@@ -110,17 +110,18 @@ class GameRunner:
                 reward *= 2
 
             if next_state[0] >= 0.5:
-                reward += 100
-            elif next_state[0] >= 0.25:
-                reward += 20
-            elif next_state[0] >= 0.1:
-                reward += 10
-
-            # if next_state[1] > 0.1:
-            #     reward += 3
-            # elif abs(next_state[1]) > 0.08:
-            #     reward += .6
-            if abs(next_state[1]) > 0.01:
+                reward += 200
+            # elif next_state[0] >= 0.25:
+            #     reward += 100
+            # elif next_state[0] >= 0.1:
+            #     reward += 50
+            elif next_state[0] >= -0.3:
+                reward += 5
+                
+            if (next_state[1]) < -0.1:
+                print('too fast')
+                reward -= .2
+            elif abs(next_state[1]) > 0.011:
                 reward += .2
 
             if next_state[0] > max_x:
@@ -155,7 +156,7 @@ class GameRunner:
             return np.argmax(self._model.predict_one(state, self._sess))
 
     def _replay(self):
-        GAMMA = 0.12
+        GAMMA = 0.92
         batch = self._memory.sample(self._model._batch_size)
         states = np.array([val[0] for val in batch])
         next_states = np.array([(np.zeros(self._model._num_states)
@@ -185,7 +186,7 @@ class GameRunner:
 
 
 if __name__ == "__main__":
-    BATCH_SIZE = 200
+    BATCH_SIZE = 1000
     MIN_EPSILON = 0.01
     MAX_EPSILON = 0.5
     LAMBDA = 9e-4
@@ -197,7 +198,7 @@ if __name__ == "__main__":
     num_actions = env.action_space.n
 
     model = NNModel(num_states, num_actions, BATCH_SIZE)
-    mem = Memory(5e4)
+    mem = Memory(1e4)
 
     with tf.Session() as sess:
         sess.run(model._var_init)
