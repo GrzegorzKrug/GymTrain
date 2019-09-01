@@ -132,7 +132,7 @@ class GameRunner:
                 next_state = None
 
             self._memory.add_sample((state, action, reward, next_state))
-            self._replay()
+            self._train()
             # exponentially decay the eps value
             self._steps += 1
             self._eps = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) \
@@ -155,7 +155,7 @@ class GameRunner:
         else:
             return np.argmax(self._model.predict_one(state, self._sess))
 
-    def _replay(self):
+    def _train(self):
         GAMMA = 0.92
         batch = self._memory.sample(self._model._batch_size)
         states = np.array([val[0] for val in batch])
