@@ -195,15 +195,15 @@ class A2CAgent:
 
 env = gym.make('CartPole-v0')
 model = Model(num_actions=env.action_space.n)
-
 obs = env.reset()
+
 # no feed_dict or tf.Session() needed at all
 action, value = model.action_value(obs[None, :])
-print(action, value) # [1] [-0.00145713]
+print(action, value)  # [1] [-0.00145713]
 
 agent = A2CAgent(model)
-rewards_sum = agent.test(env)
-print("%d out of 200" % rewards_sum)  # 18 out of 200
+# rewards_sum = agent.test(env)
+# print("%d out of 200" % rewards_sum)  # 18 out of 200
 
 rewards_history = agent.train(env)
 print("Finished training, testing...")
