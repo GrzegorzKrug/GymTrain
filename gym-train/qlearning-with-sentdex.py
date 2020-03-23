@@ -14,8 +14,8 @@ SHOW_EVERY = 1000
 DISCRETE_OBS_SIZE = [20] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.8  # not a constant, going to be decayed
-START_EPSILON_DECAYING = 10
+eps = 0.6  # not a constant, going to be decayed
+START_EPSILON_DECAYING = 500
 END_EPSILON_DECAYING = EPISODES // 2
 # END_EPSILON_DECAYING = 100
 
@@ -63,7 +63,7 @@ for episode in range(EPISODES):
         except StopIteration:
             eps = 0
 
-    print(f"Episode: {episode}, Epsilon: {eps}")
+    # print(f"Episode: {episode}, Epsilon: {eps}")
     if episode % SHOW_EVERY == 0:
         render = True
     else:
@@ -96,9 +96,5 @@ for episode in range(EPISODES):
 
         discrete_state = new_discrete_state
 
-        # if END_EPSILON_DECAYING >= episode >= START_EPSILON_DECAYING:
-        #     epsilon = epsilon + epsilon_decay_value
-
     env.close()
-
 
