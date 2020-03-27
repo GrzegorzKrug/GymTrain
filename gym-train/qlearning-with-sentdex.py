@@ -7,15 +7,15 @@ env = gym.make("MountainCar-v0")
 
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95  # weight, how important are future action over current
-EPISODES = 10000
+EPISODES = 5000
 
-SHOW_EVERY = 1000
+SHOW_EVERY = EPISODES // 10
 
-DISCRETE_OBS_SIZE = [20] * len(env.observation_space.high)
+DISCRETE_OBS_SIZE = [100] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.6  # not a constant, going to be decayed
-START_EPSILON_DECAYING = 500
+eps = 0.25  # not a constant, going to be decayed
+START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
 # END_EPSILON_DECAYING = 100
 
@@ -62,12 +62,15 @@ for episode in range(EPISODES):
             eps = next(eps_iterator)
         except StopIteration:
             eps = 0
-
-    # print(f"Episode: {episode}, Epsilon: {eps}")
+    if episode % 100 == 0:
+        print(f"Episode: {episode}, Epsilon: {eps}")
     if episode % SHOW_EVERY == 0:
         render = True
     else:
         render = False
+    if episode == EPISODES - 1:
+        render = True
+        input("Press to show final agent...")
 
     discrete_state = get_discrete_state(env.reset())
     done = False
