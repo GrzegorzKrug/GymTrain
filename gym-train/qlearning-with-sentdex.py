@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 5
+run_num = 6
 
 LEARNING_RATE = 0.1
 DISCOUNT = 0.90  # weight, how important are future action over current
@@ -17,10 +17,10 @@ TIME_FRAME = 500
 DISCRETE_OBS_SIZE = [30] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.5  # not a constant, going to be decayed
-END_EPS = 0.01
+eps = 0.4  # not a constant, going to be decayed
+END_EPS = 0.05
 START_EPSILON_DECAYING = 0
-END_EPSILON_DECAYING = EPISODES // 2
+END_EPSILON_DECAYING = EPISODES * 3 // 4
 
 os.mkdir(f"qtables_{run_num}")
 
