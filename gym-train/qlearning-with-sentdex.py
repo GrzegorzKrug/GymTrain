@@ -1,26 +1,32 @@
 import gym
 import time
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 env = gym.make("MountainCar-v0")
 
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.3
 DISCOUNT = 0.95  # weight, how important are future action over current
-EPISODES = 5000
+EPISODES = 10000
 
-SHOW_EVERY = EPISODES // 10
+SHOW_EVERY = EPISODES // 5
+TIME_FRAME = 500
 
-DISCRETE_OBS_SIZE = [100] * len(env.observation_space.high)
+DISCRETE_OBS_SIZE = [40] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.25  # not a constant, going to be decayed
+eps = 0.50  # not a constant, going to be decayed
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
 # END_EPSILON_DECAYING = 100
 
 
 q_table = np.random.uniform(low=-2, high=0, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
+
+ep_rewards = []
+aggr_ep_rewards = {'ep': [], 'avg': [], 'min': [], 'max': []}
 
 
 def get_discrete_state(state):
@@ -52,22 +58,24 @@ def eps_function(start, stop, n):
         yield this_eps
 
 
-# eps_iterator = iter(EpsIterator(epsilon, 0, END_EPSILON_DECAYING - START_EPSILON_DECAYING))
 eps_iterator = iter(np.linspace(eps, 0, END_EPSILON_DECAYING - START_EPSILON_DECAYING))
 
 
 for episode in range(EPISODES):
+    _episode_reward = 0
+    _reached = False
+
     if END_EPSILON_DECAYING >= episode >= START_EPSILON_DECAYING:
         try:
             eps = next(eps_iterator)
         except StopIteration:
             eps = 0
-    if episode % 100 == 0:
-        print(f"Episode: {episode}, Epsilon: {eps}")
-    if episode % SHOW_EVERY == 0:
+
+    if not episode % SHOW_EVERY:
         render = True
     else:
         render = False
+
     if episode == EPISODES - 1:
         render = True
         input("Press to show final agent...")
@@ -82,10 +90,11 @@ for episode in range(EPISODES):
 
         new_state, reward, done, _ = env.step(action)
         new_discrete_state = get_discrete_state(new_state)
+        _episode_reward += reward
 
         if render:
             env.render()
-            time.sleep(0.007)
+            time.sleep(0.009)
 
         if not done:
             max_future_q = np.max(q_table[new_discrete_state])  # highest value of q action
@@ -94,10 +103,31 @@ for episode in range(EPISODES):
             q_table[discrete_state+(action, )] = new_q
 
         elif new_state[0] >= env.goal_position:
-            print(f"We reached goal at: {episode}")
+            # print(f"We reached goal at: {episode}")
+            _reached = True
             q_table[discrete_state + (action,)] = 0
 
         discrete_state = new_discrete_state
+    if render:
+        env.close()
 
-    env.close()
+    ep_rewards.append(_episode_reward)
 
+    if not episode % 100:
+        average_reward = sum(ep_rewards[-TIME_FRAME:]) / len(ep_rewards[-TIME_FRAME:])
+        aggr_ep_rewards['ep'].append(episode)
+        aggr_ep_rewards['avg'].append(average_reward)
+        aggr_ep_rewards['min'].append(min(ep_rewards[-TIME_FRAME:]))
+        aggr_ep_rewards['max'].append(max(ep_rewards[-TIME_FRAME:]))
+
+        print(f"Episode: {episode:>4d}, reward: {_episode_reward:>5.1f}, "
+              f"average: {average_reward:>4.1f}, epsilon: {eps:>5.3f}, "
+              f"min: {aggr_ep_rewards['min'][-1]:>4.1f}, max: {aggr_ep_rewards['max'][-1]:>4.1f}, "
+              f"reached: {str(_reached):>5s}")
+
+
+plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['avg'], label='avg')
+plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['min'], label='min')
+plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['max'], label='max')
+plt.legend(loc=2)
+plt.show()
