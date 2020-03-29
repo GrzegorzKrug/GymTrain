@@ -7,20 +7,20 @@ import matplotlib.pyplot as plt
 env = gym.make("MountainCar-v0")
 
 
-LEARNING_RATE = 0.3
+LEARNING_RATE = 0.4
 DISCOUNT = 0.95  # weight, how important are future action over current
-EPISODES = 10000
+EPISODES = 20000
 
 SHOW_EVERY = EPISODES // 5
 TIME_FRAME = 500
 
-DISCRETE_OBS_SIZE = [40] * len(env.observation_space.high)
+DISCRETE_OBS_SIZE = [30] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.50  # not a constant, going to be decayed
+eps = 0.4  # not a constant, going to be decayed
+END_EPS = 0.05
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
-# END_EPSILON_DECAYING = 100
 
 
 q_table = np.random.uniform(low=-2, high=0, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
@@ -70,7 +70,7 @@ for episode in range(EPISODES):
             eps = next(eps_iterator)
         except StopIteration:
             eps = 0
-
+    eps += END_EPS
     if not episode % SHOW_EVERY:
         render = True
     else:
@@ -124,6 +124,8 @@ for episode in range(EPISODES):
               f"average: {average_reward:>4.1f}, epsilon: {eps:>5.3f}, "
               f"min: {aggr_ep_rewards['min'][-1]:>4.1f}, max: {aggr_ep_rewards['max'][-1]:>4.1f}, "
               f"reached: {str(_reached):>5s}")
+
+        np.save(f"qtables_2/{episode}-qtable.npy", q_table)
 
 
 plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['avg'], label='avg')
