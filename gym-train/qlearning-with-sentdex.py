@@ -2,14 +2,14 @@ import gym
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 
 env = gym.make("MountainCar-v0")
+run_num = 5
 
-
-LEARNING_RATE = 0.4
-DISCOUNT = 0.95  # weight, how important are future action over current
-EPISODES = 20000
+LEARNING_RATE = 0.1
+DISCOUNT = 0.90  # weight, how important are future action over current
+EPISODES = 25000
 
 SHOW_EVERY = EPISODES // 5
 TIME_FRAME = 500
@@ -17,11 +17,12 @@ TIME_FRAME = 500
 DISCRETE_OBS_SIZE = [30] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.4  # not a constant, going to be decayed
-END_EPS = 0.05
+eps = 0.5  # not a constant, going to be decayed
+END_EPS = 0.01
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
 
+os.mkdir(f"qtables_{run_num}")
 
 q_table = np.random.uniform(low=-2, high=0, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
 
@@ -68,11 +69,13 @@ for episode in range(EPISODES):
     if END_EPSILON_DECAYING >= episode >= START_EPSILON_DECAYING:
         try:
             eps = next(eps_iterator)
+            eps += END_EPS
         except StopIteration:
-            eps = 0
-    eps += END_EPS
+            eps = END_EPS
+
     if not episode % SHOW_EVERY:
         render = True
+        render = False
     else:
         render = False
 
@@ -113,7 +116,7 @@ for episode in range(EPISODES):
 
     ep_rewards.append(_episode_reward)
 
-    if not episode % 100:
+    if not episode % 10:
         average_reward = sum(ep_rewards[-TIME_FRAME:]) / len(ep_rewards[-TIME_FRAME:])
         aggr_ep_rewards['ep'].append(episode)
         aggr_ep_rewards['avg'].append(average_reward)
@@ -125,7 +128,9 @@ for episode in range(EPISODES):
               f"min: {aggr_ep_rewards['min'][-1]:>4.1f}, max: {aggr_ep_rewards['max'][-1]:>4.1f}, "
               f"reached: {str(_reached):>5s}")
 
-        np.save(f"qtables_2/{episode}-qtable.npy", q_table)
+        np.save(f"qtables_{run_num}/{episode}-qtable.npy", q_table)
+
+np.save(f"qtables_{run_num}/aggregated.npy", aggr_ep_rewards)
 
 
 plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['avg'], label='avg')
