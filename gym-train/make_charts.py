@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import style
 
 RUN_NUM = 6
 EPISODES = 25000
-
+style.use('ggplot')
 
 fig = plt.figure(figsize=(15, 8))
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
@@ -26,27 +27,33 @@ def save_chart(i, n):
 
     ax1 = fig.add_subplot(221)
     plt.imshow(np.flip(q_table[:, :, 0], axis=1), cmap='GnBu', interpolation=interp)
+    # fig1.patch.set_visible(True)
     ax2 = fig.add_subplot(222)
     plt.imshow(np.flip(q_table[:, :, 1], axis=1), cmap='GnBu', interpolation=interp)
+
     ax3 = fig.add_subplot(223)
     plt.imshow(np.flip(q_table[:, :, 2], axis=1), cmap='GnBu', interpolation=interp)
+
     ax4 = fig.add_subplot(224)
 
-    # print(aggr['ep'])
     x = aggr['ep'][0:i]
     y_max = aggr['max'][0:i]
     y_avg = aggr['avg'][0:i]
     y_min = aggr['min'][0:i]
 
-    plt.plot(x, y_max, label='Max')
-    plt.plot(x, y_avg, label='Avg')
-    plt.plot(x, y_min, label='Min')
+    plt.plot(x, y_max, label='Max score')
+    plt.plot(x, y_avg, label='Avg score')
+    plt.plot(x, y_min, label='Min score')
     plt.grid()
 
     ax1.title.set_text("Action 0")
     ax2.title.set_text("Action 1")
     ax3.title.set_text("Action 2")
     ax4.title.set_text("Best agent")
+
+    ax1.grid()
+    ax2.grid()
+    ax3.grid()
     ax4.legend(loc=2)
 
     plt.savefig(f"qtables_{RUN_NUM}_charts/{n}.png")
