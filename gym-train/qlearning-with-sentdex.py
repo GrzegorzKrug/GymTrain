@@ -5,21 +5,21 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 14
+run_num = 15
 
-LEARNING_RATE = 0.2
-DISCOUNT = 2  # weight, how important are future action over current
+LEARNING_RATE = 0.05
+DISCOUNT = 0.5  # weight, how important are future action over current
 EPISODES = 50000
 
 SHOW_EVERY = EPISODES // 6
 TIME_FRAME = 1000
-STATE_SPACES = 20
+STATE_SPACES = 40
 
 
 DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.1  # not a constant, going to be decayed
+eps = 0.6  # not a constant, going to be decayed
 END_EPS = 0.005
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
@@ -111,9 +111,9 @@ for episode in range(EPISODES):
         aggr_ep_rewards['min'].append(min(ep_rewards[-TIME_FRAME:]))
         aggr_ep_rewards['max'].append(max(ep_rewards[-TIME_FRAME:]))
 
-        print(f"Episode: {episode:>4d}, reward: {_episode_reward:>5.1f}, "
-              f"average: {average_reward:>4.1f}, epsilon: {eps:>5.3f}, "
-              f"min: {aggr_ep_rewards['min'][-1]:>4.1f}, max: {aggr_ep_rewards['max'][-1]:>4.1f}, "
+        print(f"Episode: {episode:>7d}, reward: {_episode_reward:>6.1f}, "
+              f"average: {average_reward:>6.1f}, epsilon: {eps:>5.3f}, "
+              f"min: {aggr_ep_rewards['min'][-1]:>6.1f}, max: {aggr_ep_rewards['max'][-1]:>6.1f}, "
               f"goal: {str(_reached):>5s}")
 
         np.save(f"qtables_{run_num}/{episode}-qtable.npy", q_table)

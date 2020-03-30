@@ -4,7 +4,7 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 13
+RUN_NUM = 15
 EPISODES = 50000
 style.use('ggplot')
 
@@ -73,7 +73,7 @@ def save_chart(i, n):
 
 for i, n in enumerate(range(0, EPISODES, 10)):
     i += 1
-    print(f"Started: {i}, {n}")
+    print(f"Started[{RUN_NUM}]: {i}, {n}")
     save_chart(i=i, n=n)
 
 
