@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 7
+run_num = 8
 
 LEARNING_RATE = 0.2
-DISCOUNT = 0.96  # weight, how important are future action over current
+DISCOUNT = 0.8  # weight, how important are future action over current
 EPISODES = 50000
 
 SHOW_EVERY = EPISODES // 5
@@ -17,8 +17,8 @@ TIME_FRAME = 500
 DISCRETE_OBS_SIZE = [40] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.35  # not a constant, going to be decayed
-END_EPS = 0.05
+eps = 0.65  # not a constant, going to be decayed
+END_EPS = 0.005
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
 
@@ -33,25 +33,6 @@ aggr_ep_rewards = {'ep': [], 'avg': [], 'min': [], 'max': []}
 def get_discrete_state(state):
     dc_state = (state - env.observation_space.low) / discrete_obs_win_size
     return tuple(dc_state.astype(np.int))
-
-
-class EpsIterator:
-    def __init__(self, start, stop, n):
-        self.now = start
-        self.start = start
-        self.stop = stop
-        self.n = n
-
-    def __next__(self):
-        for cur_eps in np.linspace(self.start, self.stop, self.n):
-            self.now = cur_eps
-            print('Next')
-            yield self.now
-
-    def __iter__(self, *args):
-        print(f'Iter, args: {args}')
-        print(f"Now: {self.now}")
-        return self
 
 
 def eps_function(start, stop, n):
@@ -90,6 +71,7 @@ for episode in range(EPISODES):
             action = np.argmax(q_table[discrete_state])
         else:
             action = np.random.randint(0, env.action_space.n)
+
 
         new_state, reward, done, _ = env.step(action)
         new_discrete_state = get_discrete_state(new_state)

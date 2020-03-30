@@ -5,7 +5,7 @@ RUN_NUM = 7
 
 
 def make_video():
-    fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
     out = cv2.VideoWriter(f'qlearn-run-{RUN_NUM}.avi', fourcc, 60.0, (1500, 800))
 
     for i in range(0, 50000, 10):

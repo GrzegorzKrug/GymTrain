@@ -4,14 +4,15 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 7
-EPISODES = 50000
+RUN_NUM = 8
+EPISODES = 500
 style.use('ggplot')
 
 fig = plt.figure(figsize=(15, 8))
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
+rewads = np.load(f"qtables_{RUN_NUM}/rewards.npy")
 
-os.mkdir(f"qtables_{RUN_NUM}_charts")
+os.makedirs(f"qtables_{RUN_NUM}_charts", exist_ok=True)
 
 
 def get_q_color(value, vals):
@@ -23,9 +24,10 @@ def get_q_color(value, vals):
 
 def save_chart(i, n):
     q_table = np.load(f"qtables_{RUN_NUM}/{n}-qtable.npy")
-
     for _x in q_table:
         for _y in _x:
+            if np.argmax(_y) == 1:
+                print(_y)
             _y[:] = _y == _y.max()
     interp = 'kaiser'
 
@@ -48,6 +50,7 @@ def save_chart(i, n):
     plt.plot(x, y_max, label='Max score')
     plt.plot(x, y_avg, label='Avg score')
     plt.plot(x, y_min, label='Min score')
+    plt.scatter(range(n), rewads[:n], marker='o', c='k', s=10)
     plt.grid()
 
     ax1.title.set_text("Action 0")
@@ -64,7 +67,6 @@ def save_chart(i, n):
     plt.clf()
 
 
-threads = []
 for i, n in enumerate(range(0, EPISODES, 10)):
     i += 1
     print(f"Started: {i}, {n}")
