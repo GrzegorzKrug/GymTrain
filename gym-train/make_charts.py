@@ -57,7 +57,7 @@ def save_chart(i, n):
 
     ax1.title.set_text("Move Left")
     ax2.title.set_text("Do nothing")
-    ax3.title.set_text("More right")
+    ax3.title.set_text("Move right")
     ax4.title.set_text("Rewards over episode")
 
     ax1.grid()

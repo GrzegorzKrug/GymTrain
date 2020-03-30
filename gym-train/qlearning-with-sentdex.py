@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 15
+run_num = 16
 
-LEARNING_RATE = 0.05
-DISCOUNT = 0.5  # weight, how important are future action over current
+LEARNING_RATE = 0.15
+DISCOUNT = 1.1  # weight, how important are future action over current
 EPISODES = 50000
 
 SHOW_EVERY = EPISODES // 6
@@ -32,7 +32,7 @@ with open('tables.txt', 'at') as file:
 
 os.mkdir(f"qtables_{run_num}")
 
-q_table = np.random.uniform(low=-2, high=0, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
+q_table = np.random.uniform(low=-20, high=-1, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
 
 ep_rewards = []
 aggr_ep_rewards = {'ep': [], 'avg': [], 'min': [], 'max': []}
