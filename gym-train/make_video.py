@@ -1,7 +1,7 @@
 import cv2
 import os
 
-RUN_NUM = 7
+RUN_NUM = 9
 
 
 def make_video():

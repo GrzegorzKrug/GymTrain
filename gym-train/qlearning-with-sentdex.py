@@ -5,22 +5,30 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 8
+run_num = 14
 
 LEARNING_RATE = 0.2
-DISCOUNT = 0.8  # weight, how important are future action over current
+DISCOUNT = 2  # weight, how important are future action over current
 EPISODES = 50000
 
-SHOW_EVERY = EPISODES // 5
-TIME_FRAME = 500
+SHOW_EVERY = EPISODES // 6
+TIME_FRAME = 1000
+STATE_SPACES = 20
 
-DISCRETE_OBS_SIZE = [40] * len(env.observation_space.high)
+
+DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.65  # not a constant, going to be decayed
+eps = 0.1  # not a constant, going to be decayed
 END_EPS = 0.005
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
+
+with open('tables.txt', 'at') as file:
+    file.write(f"RUN: {run_num:>3d}, Episodes: {EPISODES:>6d}, Discount: {DISCOUNT:>4.2f}, Learning-rate: {LEARNING_RATE:>4.2f}, "
+               f"Spaces: {STATE_SPACES:>3d}, "
+               f"Eps-init: {eps:>2.4f}, Eps-end: {END_EPS:>2.4f}, Eps-decay-at: {END_EPSILON_DECAYING:>6d}")
+    file.write('\n')
 
 os.mkdir(f"qtables_{run_num}")
 
@@ -56,7 +64,6 @@ for episode in range(EPISODES):
 
     if not episode % SHOW_EVERY:
         render = True
-        render = False
     else:
         render = False
 
@@ -71,7 +78,6 @@ for episode in range(EPISODES):
             action = np.argmax(q_table[discrete_state])
         else:
             action = np.random.randint(0, env.action_space.n)
-
 
         new_state, reward, done, _ = env.step(action)
         new_discrete_state = get_discrete_state(new_state)

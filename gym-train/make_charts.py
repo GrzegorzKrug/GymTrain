@@ -4,11 +4,11 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 8
-EPISODES = 500
+RUN_NUM = 13
+EPISODES = 50000
 style.use('ggplot')
 
-fig = plt.figure(figsize=(15, 8))
+
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
 rewads = np.load(f"qtables_{RUN_NUM}/rewards.npy")
 
@@ -22,14 +22,16 @@ def get_q_color(value, vals):
         return 'red', 0.4
 
 
+fig = plt.figure(figsize=(15, 8))
+
+
 def save_chart(i, n):
     q_table = np.load(f"qtables_{RUN_NUM}/{n}-qtable.npy")
     for _x in q_table:
         for _y in _x:
-            if np.argmax(_y) == 1:
-                print(_y)
             _y[:] = _y == _y.max()
     interp = 'kaiser'
+
 
     ax1 = fig.add_subplot(221)
     plt.imshow(np.flip(q_table[:, :, 0], axis=1), cmap='GnBu', interpolation=interp)
@@ -50,18 +52,20 @@ def save_chart(i, n):
     plt.plot(x, y_max, label='Max score')
     plt.plot(x, y_avg, label='Avg score')
     plt.plot(x, y_min, label='Min score')
-    plt.scatter(range(n), rewads[:n], marker='o', c='k', s=10)
+    plt.scatter(range(n), rewads[:n], c='m', marker='o', s=5, label='Reward', alpha=0.1)
     plt.grid()
 
-    ax1.title.set_text("Action 0")
-    ax2.title.set_text("Action 1")
-    ax3.title.set_text("Action 2")
-    ax4.title.set_text("Best agent")
+    ax1.title.set_text("Move Left")
+    ax2.title.set_text("Do nothing")
+    ax3.title.set_text("More right")
+    ax4.title.set_text("Rewards over episode")
 
     ax1.grid()
     ax2.grid()
     ax3.grid()
     ax4.legend(loc=2)
+    ax4.set_ylabel('Reward')
+    ax4.set_xlabel('Episodes')
 
     plt.savefig(f"qtables_{RUN_NUM}_charts/{n}.png")
     plt.clf()
