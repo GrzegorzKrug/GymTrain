@@ -1,13 +1,17 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import style
+import os
 
-RUN_NUM = 6
-EPISODES = 25000
+
+RUN_NUM = 7
+EPISODES = 50000
 style.use('ggplot')
 
 fig = plt.figure(figsize=(15, 8))
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
+
+os.mkdir(f"qtables_{RUN_NUM}_charts")
 
 
 def get_q_color(value, vals):

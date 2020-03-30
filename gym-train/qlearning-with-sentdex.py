@@ -20,7 +20,7 @@ discrete_obs_win_size = (env.observation_space.high - env.observation_space.low)
 eps = 0.35  # not a constant, going to be decayed
 END_EPS = 0.05
 START_EPSILON_DECAYING = 0
-END_EPSILON_DECAYING = EPISODES * 3 // 4
+END_EPSILON_DECAYING = EPISODES // 2
 
 os.mkdir(f"qtables_{run_num}")
 
@@ -79,9 +79,9 @@ for episode in range(EPISODES):
     else:
         render = False
 
-    if episode == EPISODES - 1:
-        render = True
-        input("Press to show final agent...")
+    # if episode == EPISODES - 1:
+    #     render = True
+    #     input("Press to show final agent...")
 
     discrete_state = get_discrete_state(env.reset())
     done = False
@@ -126,7 +126,7 @@ for episode in range(EPISODES):
         print(f"Episode: {episode:>4d}, reward: {_episode_reward:>5.1f}, "
               f"average: {average_reward:>4.1f}, epsilon: {eps:>5.3f}, "
               f"min: {aggr_ep_rewards['min'][-1]:>4.1f}, max: {aggr_ep_rewards['max'][-1]:>4.1f}, "
-              f"reached: {str(_reached):>5s}")
+              f"goal: {str(_reached):>5s}")
 
         np.save(f"qtables_{run_num}/{episode}-qtable.npy", q_table)
 
