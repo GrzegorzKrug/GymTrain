@@ -5,19 +5,19 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 6
+run_num = 7
 
-LEARNING_RATE = 0.1
-DISCOUNT = 0.90  # weight, how important are future action over current
-EPISODES = 25000
+LEARNING_RATE = 0.2
+DISCOUNT = 0.96  # weight, how important are future action over current
+EPISODES = 50000
 
 SHOW_EVERY = EPISODES // 5
 TIME_FRAME = 500
 
-DISCRETE_OBS_SIZE = [30] * len(env.observation_space.high)
+DISCRETE_OBS_SIZE = [40] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.4  # not a constant, going to be decayed
+eps = 0.35  # not a constant, going to be decayed
 END_EPS = 0.05
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES * 3 // 4
@@ -131,6 +131,7 @@ for episode in range(EPISODES):
         np.save(f"qtables_{run_num}/{episode}-qtable.npy", q_table)
 
 np.save(f"qtables_{run_num}/aggregated.npy", aggr_ep_rewards)
+np.save(f"qtables_{run_num}/rewards.npy", ep_rewards)
 
 
 plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['avg'], label='avg')
