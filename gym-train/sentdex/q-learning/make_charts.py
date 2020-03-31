@@ -4,7 +4,7 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 19
+RUN_NUM = 21
 EPISODES = 50000
 style.use('ggplot')
 
