@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 16
+run_num = 18
 
-LEARNING_RATE = 0.15
+LEARNING_RATE = 0.2
+# Discount should be not less than 1! Due to numeric loss
 DISCOUNT = 1.1  # weight, how important are future action over current
 EPISODES = 50000
 
@@ -19,12 +20,12 @@ STATE_SPACES = 40
 DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.6  # not a constant, going to be decayed
-END_EPS = 0.005
+eps = 0.45  # not a constant, going to be decayed
+END_EPS = 0.01
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
 
-with open('tables.txt', 'at') as file:
+with open('run_params.txt', 'at') as file:
     file.write(f"RUN: {run_num:>3d}, Episodes: {EPISODES:>6d}, Discount: {DISCOUNT:>4.2f}, Learning-rate: {LEARNING_RATE:>4.2f}, "
                f"Spaces: {STATE_SPACES:>3d}, "
                f"Eps-init: {eps:>2.4f}, Eps-end: {END_EPS:>2.4f}, Eps-decay-at: {END_EPSILON_DECAYING:>6d}")

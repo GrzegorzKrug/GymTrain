@@ -4,7 +4,7 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 15
+RUN_NUM = 16
 EPISODES = 50000
 style.use('ggplot')
 
@@ -70,6 +70,8 @@ def save_chart(i, n):
     plt.savefig(f"qtables_{RUN_NUM}_charts/{n}.png")
     plt.clf()
 
+
+save_chart(i=EPISODES-10//10, n=EPISODES-10)
 
 for i, n in enumerate(range(0, EPISODES, 10)):
     i += 1
