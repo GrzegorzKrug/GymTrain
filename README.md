@@ -4,6 +4,6 @@
 Use various technologies
 
 #### Current Scopes:
-[Q-learning with sentdex](./sentdex/q-learning)
+[Q-learning with sentdex](gym-train/sentdex/q-learning)
 
 #### Finished with results
