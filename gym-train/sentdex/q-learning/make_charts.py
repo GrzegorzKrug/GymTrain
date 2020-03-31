@@ -10,7 +10,7 @@ style.use('ggplot')
 
 
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
-rewads = np.load(f"qtables_{RUN_NUM}/rewards.npy")
+rewards = np.load(f"qtables_{RUN_NUM}/rewards.npy")
 
 os.makedirs(f"qtables_{RUN_NUM}_charts", exist_ok=True)
 
@@ -30,13 +30,12 @@ def save_chart(i, n):
     for _x in q_table:
         for _y in _x:
             _y[:] = _y == _y.max()
+
     interp = 'kaiser'
-
-
 
     ax1 = fig.add_subplot(221)
     plt.imshow(np.flip(q_table[:, :, 0], axis=1), cmap='GnBu', interpolation=interp)
-    # fig1.patch.set_visible(True)
+
     ax2 = fig.add_subplot(222)
     plt.imshow(np.flip(q_table[:, :, 1], axis=1), cmap='GnBu', interpolation=interp)
 
@@ -53,7 +52,7 @@ def save_chart(i, n):
     plt.plot(x, y_max, label='Max score')
     plt.plot(x, y_avg, label='Avg score')
     plt.plot(x, y_min, label='Min score')
-    plt.scatter(range(n), rewads[:n], c='m', marker='o', s=5, label='Reward', alpha=0.1)
+    plt.scatter(range(n), rewards[:n], c='m', marker='o', s=5, label='Reward', alpha=0.1)
     plt.grid()
 
     ax1.title.set_text("Move Left")
@@ -78,6 +77,4 @@ for i, n in enumerate(range(0, EPISODES, 10)):
     i += 1
     print(f"Started[{RUN_NUM}]: {i}, {n}")
     save_chart(i=i, n=n)
-
-
 
