@@ -4,7 +4,7 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 16
+RUN_NUM = 19
 EPISODES = 50000
 style.use('ggplot')
 
@@ -22,7 +22,7 @@ def get_q_color(value, vals):
         return 'red', 0.4
 
 
-fig = plt.figure(figsize=(15, 8))
+fig = plt.figure(figsize=(16, 9))
 
 
 def save_chart(i, n):
@@ -31,6 +31,7 @@ def save_chart(i, n):
         for _y in _x:
             _y[:] = _y == _y.max()
     interp = 'kaiser'
+
 
 
     ax1 = fig.add_subplot(221)
@@ -58,7 +59,7 @@ def save_chart(i, n):
     ax1.title.set_text("Move Left")
     ax2.title.set_text("Do nothing")
     ax3.title.set_text("Move right")
-    ax4.title.set_text("Rewards over episode")
+    ax4.title.set_text(f"Episode #{n}")
 
     ax1.grid()
     ax2.grid()
