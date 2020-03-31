@@ -4,8 +4,8 @@ from matplotlib import style
 import os
 
 
-RUN = ('10', '11', '12', '13')
-DIM = (2, 2)
+RUN = ('16', '17', '18', '19')
+DIM = (2, 3)
 
 EPISODES = 50000
 style.use('ggplot')
@@ -41,7 +41,7 @@ def plot_graph(ax, run_num):
     ax.title.set_text("Move Left")
     ax.title.set_text("Do nothing")
     ax.title.set_text("Move right")
-    ax.title.set_text(f"Run {run_num}")
+    ax.title.set_text(f"Run #{run_num}")
     ax.set_ylim([-205, -80])
 
     ax.legend(loc=2)

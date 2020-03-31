@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 18
+run_num = 19
 
-LEARNING_RATE = 0.2
+LEARNING_RATE = 0.1
 # Discount should be not less than 1! Due to numeric loss
-DISCOUNT = 1.1  # weight, how important are future action over current
+DISCOUNT = 1.15  # weight, how important are future action over current
 EPISODES = 50000
 
 SHOW_EVERY = EPISODES // 6
@@ -20,7 +20,7 @@ STATE_SPACES = 40
 DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.45  # not a constant, going to be decayed
+eps = 0.5  # not a constant, going to be decayed
 END_EPS = 0.01
 START_EPSILON_DECAYING = 0
 END_EPSILON_DECAYING = EPISODES // 2
