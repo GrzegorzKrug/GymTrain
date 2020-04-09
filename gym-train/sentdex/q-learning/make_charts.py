@@ -4,8 +4,9 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 21
-EPISODES = 50000
+RUN_NUM = 22
+EPISODES = 20000
+PLOT_EPS = True
 style.use('ggplot')
 
 
@@ -25,29 +26,36 @@ def get_q_color(value, vals):
 fig = plt.figure(figsize=(16, 9))
 
 
-def save_chart(i, n):
+def save_chart(n):
     q_table = np.load(f"qtables_{RUN_NUM}/{n}-qtable.npy")
     for _x in q_table:
         for _y in _x:
             _y[:] = _y == _y.max()
 
+    i = n // 10
     interp = 'kaiser'
 
     ax1 = fig.add_subplot(221)
     plt.imshow(np.flip(q_table[:, :, 0], axis=1), cmap='GnBu', interpolation=interp)
 
-    ax2 = fig.add_subplot(222)
-    plt.imshow(np.flip(q_table[:, :, 1], axis=1), cmap='GnBu', interpolation=interp)
-
     ax3 = fig.add_subplot(223)
     plt.imshow(np.flip(q_table[:, :, 2], axis=1), cmap='GnBu', interpolation=interp)
-
-    ax4 = fig.add_subplot(224)
 
     x = aggr['ep'][0:i]
     y_max = aggr['max'][0:i]
     y_avg = aggr['avg'][0:i]
     y_min = aggr['min'][0:i]
+    eps = aggr['eps'][0:i]
+
+    ax2 = fig.add_subplot(222)
+    if not PLOT_EPS:
+        plt.imshow(np.flip(q_table[:, :, 1], axis=1), cmap='GnBu', interpolation=interp)
+        ax2.title.set_text("Do nothing")
+    else:
+        plt.plot(x, eps, color='b', label='Epsilon')
+        ax2.title.set_text("Epsilon")
+
+    ax4 = fig.add_subplot(224)
 
     plt.plot(x, y_max, label='Max score')
     plt.plot(x, y_avg, label='Avg score')
@@ -56,7 +64,7 @@ def save_chart(i, n):
     plt.grid()
 
     ax1.title.set_text("Move Left")
-    ax2.title.set_text("Do nothing")
+
     ax3.title.set_text("Move right")
     ax4.title.set_text(f"Episode #{n}")
 
@@ -71,10 +79,10 @@ def save_chart(i, n):
     plt.clf()
 
 
-save_chart(i=EPISODES-10//10, n=EPISODES-10)
+save_chart(n=EPISODES-10)
 
-for i, n in enumerate(range(0, EPISODES, 10)):
+for i, n in enumerate(range(0, EPISODES, 1000)):
     i += 1
     print(f"Started[{RUN_NUM}]: {i}, {n}")
-    save_chart(i=i, n=n)
+    save_chart(n=n)
 

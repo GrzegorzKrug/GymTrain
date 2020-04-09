@@ -5,33 +5,33 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 21
+run_num = 23
 
-LEARNING_RATE = 0.05
+LEARNING_RATE = 0.5
 # Discount should be not less than 1! Due to numeric loss
-DISCOUNT = 1  # weight, how important are future action over current
-EPISODES = 50000
-EPISODE_OFFSET = 50000
+DISCOUNT = 0.95  # weight, how important are future action over current
+EPISODES = 5000
+EPISODE_OFFSET = 0
 
 
-SHOW_EVERY = EPISODES // 6
+SHOW_EVERY = EPISODES // 5
 TIME_FRAME = 2000
 STATE_SPACES = 40
 
-EPS_ON = True
+EPS_ON = False
 EPS_TOGGLE = True
-EPS_INVERVAL = 1000
+EPS_INVERVAL = 500
 
 DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
 eps = 0.3  # not a constant, going to be decayed
-END_EPS = 0.005
+END_EPS = 0
 START_EPSILON_DECAYING = 0 + EPISODE_OFFSET
-END_EPSILON_DECAYING = (EPISODES) // 2 + EPISODE_OFFSET
+END_EPSILON_DECAYING = EPISODES // 3 + EPISODE_OFFSET
 
-q_table = np.random.uniform(low=-20, high=-1, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
-q_table = np.load('qtables_20/49990-qtable.npy')
+q_table = np.random.uniform(low=-3, high=0, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
+# q_table = np.load('qtables_20/49990-qtable.npy')
 
 ep_rewards = []
 aggr_ep_rewards = {'ep': [], 'avg': [], 'min': [], 'max': [], 'eps': []}
@@ -69,12 +69,12 @@ for episode in range(0 + EPISODE_OFFSET, EPISODES+EPISODE_OFFSET):
             EPS_ON ^= True
 
     if EPS_ON:
-        if END_EPSILON_DECAYING >= episode >= START_EPSILON_DECAYING:
-            try:
-                eps = next(eps_iterator)
-                eps += END_EPS
-            except StopIteration:
-                eps = END_EPS
+        # if END_EPSILON_DECAYING >= episode >= START_EPSILON_DECAYING:
+        try:
+            eps = next(eps_iterator)
+            eps += END_EPS
+        except StopIteration:
+            eps = END_EPS
     else:
         eps = 0
 
@@ -83,9 +83,9 @@ for episode in range(0 + EPISODE_OFFSET, EPISODES+EPISODE_OFFSET):
     else:
         render = False
 
-    # if episode == EPISODES - 1:
-    #     render = True
-    #     input("Press to show final agent...")
+    if episode == EPISODES - 1:
+        render = True
+        input("Press to show final agent...")
 
     discrete_state = get_discrete_state(env.reset())
     done = False
