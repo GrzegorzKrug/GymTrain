@@ -5,12 +5,12 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 23
+run_num = 24
 
-LEARNING_RATE = 0.135
+LEARNING_RATE = 0.115
 # Discount should be not less than 1! Due to numeric loss
-DISCOUNT = 0.9  # weight, how important are future action over current
-EPISODES = 50000
+DISCOUNT = 0.955  # weight, how important are future action over current
+EPISODES = 70000
 EPISODE_OFFSET = 0
 
 SHOW_EVERY = EPISODES // 5
@@ -19,17 +19,17 @@ STATE_SPACES = 40
 EPS_ON = False
 EPS_TOGGLE = True
 EPS_INVERVAL = EPISODES // 50
-TIME_FRAME = EPS_INVERVAL // 2
+TIME_FRAME = EPS_INVERVAL // 2  # making graph smoother, smaller
 
 DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.7  # not a constant, going to be decayed
+eps = 0.5  # not a constant, going to be decayed
 END_EPS = 0
 START_EPSILON_DECAYING = 0 + EPISODE_OFFSET
-END_EPSILON_DECAYING = EPISODES // 3 + EPISODE_OFFSET
+END_EPSILON_DECAYING = EPISODES // 2 + EPISODE_OFFSET
 
-q_table = np.random.uniform(low=-3, high=0, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
+q_table = np.random.uniform(low=-10, high=-5, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
 # q_table = np.load('qtables_20/49990-qtable.npy')
 
 ep_rewards = []

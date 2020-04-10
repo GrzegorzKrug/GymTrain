@@ -4,10 +4,13 @@ from matplotlib import style
 import os
 
 
-RUN_NUM = 22
-EPISODES = 20000
+RUN_NUM = 24
+EPISODES = 50000
 PLOT_EPS = True
-style.use('bmh')
+HIGH_RES = True
+
+
+plots = np.linspace(0, EPISODES-10, 30)
 
 
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
@@ -23,7 +26,12 @@ def get_q_color(value, vals):
         return 'red', 0.4
 
 
-fig = plt.figure(figsize=(16, 9))
+if HIGH_RES:
+    fig = plt.figure(figsize=(32, 18))
+    style.use('fivethirtyeight')
+else:
+    fig = plt.figure(figsize=(16, 9))
+    style.use('bmh')
 
 
 def save_chart(n):
@@ -33,7 +41,6 @@ def save_chart(n):
             _y[:] = _y == _y.max()
 
     i = n // 10
-    interp = 'kaiser'
     interp = 'nearest'
 
     ax1 = fig.add_subplot(221)
@@ -82,8 +89,8 @@ def save_chart(n):
 
 save_chart(n=EPISODES-10)
 
-for i, n in enumerate(range(0, EPISODES, 1000)):
-    i += 1
-    print(f"Started[{RUN_NUM}]: {i}, {n}")
+for index in plots:
+    n = int(round(index, -1))
+    print(f"Started[{RUN_NUM}]: {n}")
     save_chart(n=n)
 
