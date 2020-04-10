@@ -10,3 +10,6 @@ RUN:  17, Episodes:  50000, Discount: 1.10, Learning-rate: 0.40, Spaces:  40, Ep
 RUN:  18, Episodes:  50000, Discount: 1.10, Learning-rate: 0.20, Spaces:  40, Eps-init: 0.4500, Eps-end: 0.0100, Eps-decay-at:  25000
 RUN:  19, Episodes:  50000, Discount: 1.15, Learning-rate: 0.10, Spaces:  40, Eps-init: 0.5000, Eps-end: 0.0100, Eps-decay-at:  25000
 
+RUN:  23, Episodes:  50000, Discount: 1.10, Learning-rate: 0.10, Spaces:  40, Eps-init: 0.5000, Eps-end: 0.0000, Eps-decay-at:  16666, Timeframe:   2000, Eps-toggle:   True
+RUN:  23, Episodes:  50000, Discount: 1.10, Learning-rate: 0.10, Spaces:  40, Eps-init: 0.6500, Eps-end: 0.0000, Eps-decay-at:  16666, Timeframe:   2000, Eps-toggle:   True
+RUN:  23, Episodes:  50000, Discount: 0.90, Learning-rate: 0.14, Spaces:  40, Eps-init: 0.7000, Eps-end: 0.0000Timeframe:    500, Eps-toggle:   True, Eps-window: 1000

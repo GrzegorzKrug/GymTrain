@@ -7,7 +7,7 @@ import os
 RUN_NUM = 22
 EPISODES = 20000
 PLOT_EPS = True
-style.use('ggplot')
+style.use('bmh')
 
 
 aggr = np.load(f"qtables_{RUN_NUM}/aggregated.npy", allow_pickle=True).item()
@@ -34,6 +34,7 @@ def save_chart(n):
 
     i = n // 10
     interp = 'kaiser'
+    interp = 'nearest'
 
     ax1 = fig.add_subplot(221)
     plt.imshow(np.flip(q_table[:, :, 0], axis=1), cmap='GnBu', interpolation=interp)
@@ -52,14 +53,15 @@ def save_chart(n):
         plt.imshow(np.flip(q_table[:, :, 1], axis=1), cmap='GnBu', interpolation=interp)
         ax2.title.set_text("Do nothing")
     else:
-        plt.plot(x, eps, color='b', label='Epsilon')
         ax2.title.set_text("Epsilon")
+        plt.plot(x, eps, color='k', label='Epsilon')
+        plt.legend(loc=0)
 
     ax4 = fig.add_subplot(224)
 
-    plt.plot(x, y_max, label='Max score')
     plt.plot(x, y_avg, label='Avg score')
     plt.plot(x, y_min, label='Min score')
+    plt.plot(x, y_max, label='Max score')
     plt.scatter(range(n), rewards[:n], c='m', marker='o', s=5, label='Reward', alpha=0.1)
     plt.grid()
 
@@ -69,7 +71,6 @@ def save_chart(n):
     ax4.title.set_text(f"Episode #{n}")
 
     ax1.grid()
-    ax2.grid()
     ax3.grid()
     ax4.legend(loc=2)
     ax4.set_ylabel('Reward')
