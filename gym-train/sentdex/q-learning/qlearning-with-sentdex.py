@@ -5,15 +5,15 @@ import matplotlib.pyplot as plt
 import os
 
 env = gym.make("MountainCar-v0")
-run_num = 24
+run_num = 25
 
-LEARNING_RATE = 0.115
+LEARNING_RATE = 0.25
 # Discount should be not less than 1! Due to numeric loss
-DISCOUNT = 0.955  # weight, how important are future action over current
+DISCOUNT = 0.92  # weight, how important are future action over current
 EPISODES = 70000
 EPISODE_OFFSET = 0
 
-SHOW_EVERY = EPISODES // 5
+SHOW_EVERY = EPISODES // 8
 STATE_SPACES = 40
 
 EPS_ON = False
@@ -24,10 +24,10 @@ TIME_FRAME = EPS_INVERVAL // 2  # making graph smoother, smaller
 DISCRETE_OBS_SIZE = [STATE_SPACES] * len(env.observation_space.high)
 discrete_obs_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OBS_SIZE
 
-eps = 0.5  # not a constant, going to be decayed
+eps = 0.4  # not a constant, going to be decayed
 END_EPS = 0
 START_EPSILON_DECAYING = 0 + EPISODE_OFFSET
-END_EPSILON_DECAYING = EPISODES // 2 + EPISODE_OFFSET
+END_EPSILON_DECAYING = EPISODES // 2 + EPISODE_OFFSET - EPS_INVERVAL
 
 q_table = np.random.uniform(low=-10, high=-5, size=(DISCRETE_OBS_SIZE + [env.action_space.n]))
 # q_table = np.load('qtables_20/49990-qtable.npy')
@@ -39,7 +39,7 @@ aggr_ep_rewards = {'ep': [], 'avg': [], 'min': [], 'max': [], 'eps': []}
 with open('run_params.txt', 'at') as file:
     file.write(f"RUN: {run_num:>3d}, Episodes: {EPISODES:>6d}, Discount: {DISCOUNT:>4.2f}, Learning-rate: {LEARNING_RATE:>4.2f}, "
                f"Spaces: {STATE_SPACES:>3d}, "
-               f"Eps-init: {eps:>2.4f}, Eps-end: {END_EPS:>2.4f}"
+               f"Eps-init: {eps:>2.4f}, Eps-end: {END_EPS:>2.4f} "
                f"Timeframe: {TIME_FRAME:>6d}, Eps-toggle: {str(EPS_TOGGLE):>6}, Eps-window: {EPS_INVERVAL}")
     file.write('\n')
 

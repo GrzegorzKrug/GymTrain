@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import style
+import matplotlib
 import os
 
 
 RUN_NUM = 24
-EPISODES = 50000
+EPISODES = 70000
 PLOT_EPS = True
 HIGH_RES = True
 
@@ -29,6 +30,7 @@ def get_q_color(value, vals):
 if HIGH_RES:
     fig = plt.figure(figsize=(32, 18))
     style.use('fivethirtyeight')
+    matplotlib.rcParams.update({'font.size': 20})
 else:
     fig = plt.figure(figsize=(16, 9))
     style.use('bmh')
@@ -60,7 +62,8 @@ def save_chart(n):
         plt.imshow(np.flip(q_table[:, :, 1], axis=1), cmap='GnBu', interpolation=interp)
         ax2.title.set_text("Do nothing")
     else:
-        ax2.title.set_text("Epsilon")
+        ax2.title.set_text("Exploration chance")
+        ax2.set_ylabel("Epsilon")
         plt.plot(x, eps, color='k', label='Epsilon')
         plt.legend(loc=0)
 
@@ -70,7 +73,7 @@ def save_chart(n):
     plt.plot(x, y_min, label='Min score')
     plt.plot(x, y_max, label='Max score')
     plt.scatter(range(n), rewards[:n], c='m', marker='o', s=5, label='Reward', alpha=0.1)
-    plt.grid()
+    # plt.grid()
 
     ax1.title.set_text("Move Left")
 
