@@ -17,3 +17,4 @@ RUN:  24, Episodes:  70000, Discount: 0.95, Learning-rate: 0.12, Spaces:  40, Ep
 RUN:  24, Episodes:  70000, Discount: 0.95, Learning-rate: 0.12, Spaces:  40, Eps-init: 0.5000, Eps-end: 0.0000Timeframe:    700, Eps-toggle:   True, Eps-window: 1400
 RUN:  25, Episodes:  70000, Discount: 0.92, Learning-rate: 0.25, Spaces:  40, Eps-init: 0.4000, Eps-end: 0.0000 Timeframe:    700, Eps-toggle:   True, Eps-window: 1400
 RUN:  25, Episodes:  70000, Discount: 0.92, Learning-rate: 0.25, Spaces:  40, Eps-init: 0.4000, Eps-end: 0.0000 Timeframe:    700, Eps-toggle:   True, Eps-window: 1400
+RUN:  25, Episodes: 100000, Discount: 0.96, Learning-rate: 0.09, Spaces:  40, Eps-init: 0.4000, Eps-end: 0.0000 Timeframe:   1000, Eps-toggle:   True, Eps-window: 2000

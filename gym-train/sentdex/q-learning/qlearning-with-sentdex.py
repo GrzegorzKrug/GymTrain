@@ -7,10 +7,10 @@ import os
 env = gym.make("MountainCar-v0")
 run_num = 25
 
-LEARNING_RATE = 0.25
+LEARNING_RATE = 0.09
 # Discount should be not less than 1! Due to numeric loss
-DISCOUNT = 0.92  # weight, how important are future action over current
-EPISODES = 70000
+DISCOUNT = 0.96  # weight, how important are future action over current
+EPISODES = 100000
 EPISODE_OFFSET = 0
 
 SHOW_EVERY = EPISODES // 8
