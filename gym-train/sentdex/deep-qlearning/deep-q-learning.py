@@ -19,23 +19,23 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-REPLAY_MEMORY_SIZE = 5 * 10 * 200
-MIN_REPLAY_MEMORY_SIZE = 10 * 200
+SIM_COUNT = 20
 
-MINIBATCH_SIZE = 1000
+REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
+MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
+MINIBATCH_SIZE = 512
+DISCOUNT = 0.99
 
-SHOW_EVERY = 50
-TRAIN_EVERY = 5
-
-EPOCHS = 500
+EPOCHS = 200
 INITIAL_EPS = 0.6
 END_EPS = 0.1
 EPS_END_AT = 50
-DISCOUNT = 0.99
 
-SIM_COUNT = 10
 
-MODEL_NAME = "256x256"
+MODEL_NAME = "Relu32-Relu32-LinOut-"
+SHOW_EVERY = EPOCHS // 4
+TRAIN_EVERY = 5
+SHOW_LAST = False
 
 
 # Own Tensorboard class
@@ -79,8 +79,7 @@ class DQNAgent:
         # Main Model, we train it every step
         self.model = self.create_model()
         dt = datetime.datetime.timetuple(datetime.datetime.now())
-        self.name = f"logs/{MODEL_NAME}--{dt.tm_mon}-{dt.tm_mday}--{dt.tm_hour}-{dt.tm_min}-{dt.tm_sec}"
-        print(self.name)
+        self.name = f"{MODEL_NAME}--{dt.tm_mon}-{dt.tm_mday}--{dt.tm_hour}-{dt.tm_min}-{dt.tm_sec}"
 
         # Target model this is what we predict against every step
         self.target_model = self.create_model()
@@ -96,12 +95,12 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 Flatten(input_shape=self.observation_space_vals),
-                Dense(32, activation='linear'),
+                Dense(32, activation='relu'),
+                Dense(32, activation='relu'),
                 # Dropout(0.2),
 
                 # Flatten(),
 
-                Dense(8, activation='linear'),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=0.01),
@@ -162,7 +161,7 @@ class DQNAgent:
         y = np.array(y)
         history = self.model.fit(
                 X, y,
-                verbose=0, shuffle=False, epochs=2,
+                verbose=0, shuffle=False, epochs=1,
                 batch_size=64
                 # callbacks=[self.tensorboard]
         )
@@ -194,9 +193,9 @@ agent = DQNAgent(
 
 eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
 
-# x_graph = []
-# y_graph = []
-# eps_graph = []
+x_graph = []
+y_graph = []
+eps_graph = []
 
 
 for epoch in range(EPOCHS):
@@ -222,6 +221,10 @@ for epoch in range(EPOCHS):
         except StopIteration:
             eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
             eps = 0
+    if epoch == EPOCHS - 1 and SHOW_LAST:
+        render = True
+        eps = 0
+        input("Last agent...")
 
     while True:
         # Preparated Actions
@@ -246,13 +249,13 @@ for epoch in range(EPOCHS):
         for index, env in enumerate(Envs):
             new_state, reward, done, _ = env.step(Actions[index])
             if abs(new_state[1]) > 0.001:
-                reward += 0.1
+                reward += 0.2
 
             if abs(new_state[1]) > 0.003:
-                reward += 0.3
+                reward += 0.4
 
-            reward -= 0.1
-            reward -= 0.3
+            reward -= 0.2
+            reward -= 0.4
 
             # else:
             #     print(new_state)
@@ -264,7 +267,7 @@ for epoch in range(EPOCHS):
             Done[index] = done
             New_states.append(new_state)
 
-            if render and index == 0:
+            if index == 0 and render:
                 env.render()
                 time.sleep(0.001)
 
@@ -274,6 +277,8 @@ for epoch in range(EPOCHS):
                 if ind_d == 0:
                     Envs[0].close()
                 full_cost += Cost[ind_d]
+                x_graph.append(epoch)
+                y_graph.append(Cost[ind_d])
                 Cost.pop(ind_d)
                 Envs.pop(ind_d)
                 New_states.pop(ind_d)
@@ -281,23 +286,21 @@ for epoch in range(EPOCHS):
         if len(Envs) <= 0:
             break
 
-
-    # x_graph.append(epoch)
-    # y_graph.append(cost)
-    # eps_graph.append(eps)
+    eps_graph.append(eps)
 
     print(f"Epoch {epoch:^3} finished with cost_avg: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
     print(" = ="*10)
 
-# plt.figure(figsize=(16, 9))
-# plt.subplot(211)
-# plt.plot(x_graph, y_graph, label="Cost")
-#
-# plt.subplot(212)
-# plt.plot(x_graph, eps_graph, label="Epsilon")
-#
-# plt.suptitle(f"{agent.name}")
-# plt.savefig(f"{agent.name}.png")
-# plt.show()
+plt.figure(figsize=(16, 9))
+plt.subplot(211)
+plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, edgecolors='m', label="Cost")
+
+plt.subplot(212)
+plt.plot(eps_graph, label="Epsilon")
+plt.xlabel("Epochs")
+
+plt.suptitle(f"{agent.name}")
+plt.savefig(f"{agent.name}.png")
+plt.show()
 print("Session closed.")
 
