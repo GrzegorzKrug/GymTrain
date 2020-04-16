@@ -19,17 +19,17 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-REPLAY_MEMORY_SIZE = 20_000
-MIN_REPLAY_MEMORY_SIZE = 4_000
-MINIBATCH_SIZE = 1024
+REPLAY_MEMORY_SIZE = 15 * 200
+MIN_REPLAY_MEMORY_SIZE = 5 * 200
+MINIBATCH_SIZE = 256
 
-SHOW_EVERY = 100
+SHOW_EVERY = 50
 TRAIN_EVERY = 5
 
-EPOCHS = 20_000
-INITIAL_EPS = 0.6
-END_EPS = -0.5
-EPS_END_AT = 100
+EPOCHS = 10_000
+INITIAL_EPS = 0.8
+END_EPS = -0.1
+EPS_END_AT = 49
 DISCOUNT = 0.99
 
 MODEL_NAME = "256x256"
@@ -93,12 +93,12 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 Flatten(input_shape=self.observation_space_vals),
-                Dense(64, activation='relu'),
+                Dense(16, activation='relu'),
                 Dropout(0.2),
 
-                Flatten(),
+                # Flatten(),
 
-                Dense(64, activation='relu'),
+                Dense(16, activation='relu'),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=0.001),
@@ -111,16 +111,16 @@ class DQNAgent:
         self.replay_memory.append(transition)
 
     def save_model(self):
-        self.model.save_weights("last_model.model", overwrite=True)
+        self.model.save_weights("models/last_model.model", overwrite=True)
 
     def load_model(self):
-        if os.path.isfile("last_model.model"):
-            self.model.load_weights("last_model.model")
-            self.target_model.load_weights("last_model.model")
+        if os.path.isfile("models/last_model.model"):
+            self.model.load_weights("models/last_model.model")
+            self.target_model.load_weights("models/last_model.model")
 
     def get_sq(self, state):
         sq = self.model.predict(
-                np.array(state).reshape(-1, *state.shape)/255[0]
+                np.array(state).reshape(-1, *state.shape)[0]
         )
         return sq
 
@@ -177,7 +177,8 @@ obs_space = (2, )
 
 agent = DQNAgent(
         observation_space_vals=obs_space,
-        action_space_size=action_space
+        action_space_size=action_space,
+        mini_batch_size=MINIBATCH_SIZE
 )
 
 
@@ -185,7 +186,7 @@ eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
 
 x_graph = []
 y_graph = []
-
+eps_graph = []
 for epoch in range(EPOCHS):
     done = False
     cost = 0
@@ -235,12 +236,17 @@ for epoch in range(EPOCHS):
     env.close()
     x_graph.append(epoch)
     y_graph.append(cost)
-
+    eps_graph.append(eps)
     print(f"Epoch {epoch:^3} finished with cost: {cost:^9}, eps: {eps:^5}")
 
 plt.figure(figsize=(16, 9))
+plt.subplot(211)
 plt.plot(x_graph, y_graph, label="Cost")
-plt.title(f"{agent.name}")
+
+plt.subplot(212)
+plt.plot(x_graph, eps_graph, label="Epsilon")
+
+plt.suptitle(f"{agent.name}")
 plt.savefig(f"{agent.name}.png")
 plt.show()
 print("Session closed.")
