@@ -9,8 +9,10 @@ import numpy as np
 import time
 import datetime
 import random
-
+import matplotlib.pyplot as plt
 import gym
+import os
+
 
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -18,12 +20,16 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
 REPLAY_MEMORY_SIZE = 20_000
-MIN_REPLAY_MEMORY_SIZE = 5_000
-MINIBATCH_SIZE = 64
-UPDATE_TARGET_EVERY = 5
+MIN_REPLAY_MEMORY_SIZE = 4_000
+MINIBATCH_SIZE = 1024
 
-EPOCHS = 10_000
-EPS_END_AT = int(EPOCHS * 0.90)
+SHOW_EVERY = 100
+TRAIN_EVERY = 5
+
+EPOCHS = 20_000
+INITIAL_EPS = 0.6
+END_EPS = -0.5
+EPS_END_AT = 100
 DISCOUNT = 0.99
 
 MODEL_NAME = "256x256"
@@ -70,7 +76,7 @@ class DQNAgent:
         # Main Model, we train it every step
         self.model = self.create_model()
         dt = datetime.datetime.timetuple(datetime.datetime.now())
-        self.name = f"logs/{MODEL_NAME}-{dt.tm_mon}{dt.tm_mday}--{dt.tm_hour}{dt.tm_min}{dt.tm_sec}"
+        self.name = f"logs/{MODEL_NAME}--{dt.tm_mon}-{dt.tm_mday}--{dt.tm_hour}-{dt.tm_min}-{dt.tm_sec}"
         print(self.name)
 
         # Target model this is what we predict against every step
@@ -82,10 +88,12 @@ class DQNAgent:
         self.tensorboard = TensorBoard(log_dir=self.name)
         self.target_update_counter = 0
 
+        self.load_model()
+
     def create_model(self):
         model = Sequential([
                 Flatten(input_shape=self.observation_space_vals),
-                Dense(256, activation='relu'),
+                Dense(64, activation='relu'),
                 Dropout(0.2),
 
                 Flatten(),
@@ -101,6 +109,14 @@ class DQNAgent:
 
     def update_replay_memory(self, transition):
         self.replay_memory.append(transition)
+
+    def save_model(self):
+        self.model.save_weights("last_model.model", overwrite=True)
+
+    def load_model(self):
+        if os.path.isfile("last_model.model"):
+            self.model.load_weights("last_model.model")
+            self.target_model.load_weights("last_model.model")
 
     def get_sq(self, state):
         sq = self.model.predict(
@@ -139,20 +155,20 @@ class DQNAgent:
 
         X = np.array(X)
         y = np.array(y)
-
         self.model.fit(
                 X, y,
-                batch_size=self.mini_batch_size,
-                verbose=0, shuffle=False,
-                callbacks=[self.tensorboard]
+                verbose=1, shuffle=False
+                # callbacks=[self.tensorboard]
         )
-
+        # print("Fit done")
         if terminal_state:
             self.target_update_counter += 1
 
         # if self.target_update_counter > UPDATE_TARGET_EVERY:
         self.target_model.set_weights(self.model.get_weights())
         self.target_update_counter = 0
+
+        self.save_model()
 
 
 env = gym.make("MountainCar-v0")
@@ -165,7 +181,10 @@ agent = DQNAgent(
 )
 
 
-eps_iter = iter(np.linspace(0.8, 0.2, EPS_END_AT))
+eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
+
+x_graph = []
+y_graph = []
 
 for epoch in range(EPOCHS):
     done = False
@@ -173,11 +192,17 @@ for epoch in range(EPOCHS):
     try:
         eps = next(eps_iter)
     except StopIteration:
+        eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
         eps = 0
     old_state = env.reset()
 
-    if not epoch % 100:
+    if not epoch % TRAIN_EVERY:
         agent.train(True)
+
+    if not epoch % SHOW_EVERY:
+        render = True
+    else:
+        render = False
 
     while not done:
 
@@ -199,15 +224,24 @@ for epoch in range(EPOCHS):
         agent.update_replay_memory(new_transition)
 
         cost += reward
-        # env.render()
-        # time.sleep(0.005)
+        if render:
+            env.render()
+            time.sleep(0.001)
 
         if done:
             break
 
         old_state = new_state
+    env.close()
+    x_graph.append(epoch)
+    y_graph.append(cost)
+
     print(f"Epoch {epoch:^3} finished with cost: {cost:^9}, eps: {eps:^5}")
 
-# print(state)  # [Position, velocity]
+plt.figure(figsize=(16, 9))
+plt.plot(x_graph, y_graph, label="Cost")
+plt.title(f"{agent.name}")
+plt.savefig(f"{agent.name}.png")
+plt.show()
 print("Session closed.")
 
