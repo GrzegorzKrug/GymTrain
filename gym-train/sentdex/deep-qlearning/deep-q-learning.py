@@ -23,16 +23,17 @@ SIM_COUNT = 20
 
 REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
-MINIBATCH_SIZE = 512
-DISCOUNT = 0.99
+MINIBATCH_SIZE = 1024
+DISCOUNT = 0.98
+LR = 0.01
 
-EPOCHS = 200
+EPOCHS = 150
 INITIAL_EPS = 0.6
-END_EPS = 0.1
+END_EPS = 0
 EPS_END_AT = 50
 
 
-MODEL_NAME = "Relu32-Relu32-LinOut-"
+MODEL_NAME = "Relu32-Relu32-SoftMaxOut-"
 SHOW_EVERY = EPOCHS // 4
 TRAIN_EVERY = 5
 SHOW_LAST = False
@@ -94,16 +95,16 @@ class DQNAgent:
 
     def create_model(self):
         model = Sequential([
-                Flatten(input_shape=self.observation_space_vals),
+                # Flatten(),
+                Dense(32, activation='relu', input_shape=self.observation_space_vals),
+                Dropout(0.2),
                 Dense(32, activation='relu'),
-                Dense(32, activation='relu'),
-                # Dropout(0.2),
 
                 # Flatten(),
 
-                Dense(self.action_space_size, activation='linear')
+                Dense(self.action_space_size, activation='softmax')
         ])
-        model.compile(optimizer=Adam(lr=0.01),
+        model.compile(optimizer=Adam(lr=LR),
                       loss="mse",
                       metrics=['accuracy'])
 
@@ -195,8 +196,8 @@ eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
 
 x_graph = []
 y_graph = []
+average = []
 eps_graph = []
-
 
 for epoch in range(EPOCHS):
     Cost = [0] * SIM_COUNT
@@ -221,10 +222,11 @@ for epoch in range(EPOCHS):
         except StopIteration:
             eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
             eps = 0
-    if epoch == EPOCHS - 1 and SHOW_LAST:
+    if epoch == EPOCHS - 1:
         render = True
         eps = 0
-        input("Last agent...")
+        if SHOW_LAST:
+            input("Last agent...")
 
     while True:
         # Preparated Actions
@@ -286,18 +288,25 @@ for epoch in range(EPOCHS):
         if len(Envs) <= 0:
             break
 
+    average.append(full_cost/SIM_COUNT)
     eps_graph.append(eps)
 
-    print(f"Epoch {epoch:^3} finished with cost_avg: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
+    print(f"Epoch {epoch:^3} finished, with average: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
     print(" = ="*10)
 
 plt.figure(figsize=(16, 9))
 plt.subplot(211)
 plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, edgecolors='m', label="Cost")
+plt.plot(average, label="Average", color="r")
+plt.legend(loc='best')
+plt.grid()
 
 plt.subplot(212)
 plt.plot(eps_graph, label="Epsilon")
+plt.legend(loc='best')
 plt.xlabel("Epochs")
+plt.grid()
+
 
 plt.suptitle(f"{agent.name}")
 plt.savefig(f"{agent.name}.png")
