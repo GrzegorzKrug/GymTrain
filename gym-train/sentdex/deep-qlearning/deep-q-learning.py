@@ -19,17 +19,17 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-REPLAY_MEMORY_SIZE = 15 * 200
+REPLAY_MEMORY_SIZE = 5 * 200
 MIN_REPLAY_MEMORY_SIZE = 5 * 200
 MINIBATCH_SIZE = 256
 
 SHOW_EVERY = 50
 TRAIN_EVERY = 5
 
-EPOCHS = 10_000
+EPOCHS = 500
 INITIAL_EPS = 0.8
 END_EPS = -0.1
-EPS_END_AT = 49
+EPS_END_AT = 50
 DISCOUNT = 0.99
 
 MODEL_NAME = "256x256"
@@ -111,12 +111,13 @@ class DQNAgent:
         self.replay_memory.append(transition)
 
     def save_model(self):
-        self.model.save_weights("models/last_model.model", overwrite=True)
+        self.model.save_weights("models/last_model", overwrite=True)
 
     def load_model(self):
-        if os.path.isfile("models/last_model.model"):
-            self.model.load_weights("models/last_model.model")
-            self.target_model.load_weights("models/last_model.model")
+        if os.path.isfile("models/last_model.index"):
+            print("Loading model")
+            self.model.load_weights("models/last_model")
+            self.target_model.load_weights("models/last_model")
 
     def get_sq(self, state):
         sq = self.model.predict(
