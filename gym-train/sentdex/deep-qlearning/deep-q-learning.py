@@ -7,20 +7,23 @@ from collections import deque
 import tensorflow as tf
 import numpy as np
 import time
+import datetime
 import random
 
 import gym
 
 config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = False
-config.gpu_options.per_process_gpu_memory_fraction = 0.5
+config.gpu_options.allow_growth = True
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-REPLAY_MEMORY_SIZE = 10_000
-MIN_REPLAY_MEMORY_SIZE = 1_000
+REPLAY_MEMORY_SIZE = 20_000
+MIN_REPLAY_MEMORY_SIZE = 5_000
 MINIBATCH_SIZE = 64
 UPDATE_TARGET_EVERY = 5
 
+EPOCHS = 10_000
+EPS_END_AT = int(EPOCHS * 0.90)
 DISCOUNT = 0.99
 
 MODEL_NAME = "256x256"
@@ -66,13 +69,17 @@ class DQNAgent:
 
         # Main Model, we train it every step
         self.model = self.create_model()
+        dt = datetime.datetime.timetuple(datetime.datetime.now())
+        self.name = f"logs/{MODEL_NAME}-{dt.tm_mon}{dt.tm_mday}--{dt.tm_hour}{dt.tm_min}{dt.tm_sec}"
+        print(self.name)
 
         # Target model this is what we predict against every step
         self.target_model = self.create_model()
         self.target_model.set_weights(self.model.get_weights())
 
         self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
-        self.tensorboard = ModifiedTensorBoard(log_dir=f"logs/{MODEL_NAME}-{int(time.time())}")
+        # self.modifier_tensorboard = ModifiedTensorBoard(log_dir=f"logs/{MODEL_NAME}-{int(time.time())}")
+        self.tensorboard = TensorBoard(log_dir=self.name)
         self.target_update_counter = 0
 
     def create_model(self):
@@ -101,33 +108,34 @@ class DQNAgent:
         )
         return sq
 
-    def train(self, terminal_state, step):
+    def train(self, terminal_state):
         if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
             return
 
+        # mini batch:
+        # (array([-0.49398561,  0.00714135]), 1, array([-0.48706607,  0.00691954]), -1.0, False)
         minibatch = random.sample(self.replay_memory, self.mini_batch_size)
-        current_states = np.array([transition[0] for transition in minibatch]) / 255
-        current_qs_list = self.model.predict(current_states)
+        old_states = np.array([transition[0] for transition in minibatch])
+        new_states = np.array([transition[2] for transition in minibatch])
 
-        new_current_states = np.array([transition[3] for transition in minibatch]) / 255
-
-        future_qs_list = self.target_model.predict(new_current_states)
+        current_qs_list = self.model.predict(old_states)
+        future_qs_list = self.target_model.predict(new_states)
 
         X = []
         y = []
 
-        for index, (current_state, action, reward, new_current_state, done) in enumerate(minibatch):
+        for index, (old_state, action, new_state, reward, done) in enumerate(minibatch):
             if not done:
                 max_future_q = np.max(future_qs_list[index])
                 new_q = reward + DISCOUNT * max_future_q
             else:
                 new_q = reward
 
-            current_qs = current_qs_list[index]
-            current_qs[action] = new_q
+            old_qs = current_qs_list[index]
+            old_qs[action] = new_q
 
-            X.append(current_state)
-            y.append(current_qs)
+            X.append(old_state)
+            y.append(old_qs)
 
         X = np.array(X)
         y = np.array(y)
@@ -135,51 +143,71 @@ class DQNAgent:
         self.model.fit(
                 X, y,
                 batch_size=self.mini_batch_size,
-                verbose=0, shuffle=False
-                # callbacks=[self.tensorboard] if terminal_state else None
+                verbose=0, shuffle=False,
+                callbacks=[self.tensorboard]
         )
 
         if terminal_state:
             self.target_update_counter += 1
 
-        if self.target_update_counter > UPDATE_TARGET_EVERY:
-            self.target_model.set_weights(self.model.get_weights())
-            self.target_update_counter = 0
+        # if self.target_update_counter > UPDATE_TARGET_EVERY:
+        self.target_model.set_weights(self.model.get_weights())
+        self.target_update_counter = 0
 
 
 env = gym.make("MountainCar-v0")
-state = env.reset()
 action_space = 3
-obs_space = (2, 1)
+obs_space = (2, )
+
 agent = DQNAgent(
         observation_space_vals=obs_space,
         action_space_size=action_space
 )
 
-flag = True
-interval = 10
-cost = 0
-for x in range(300):
 
-    if not x % interval:
-        flag ^= True
-        interval += interval + 3 + interval // 7
-        print("Flip", f"next interval: {interval}")
-    action = 0 if flag else 2
+eps_iter = iter(np.linspace(0.8, 0.2, EPS_END_AT))
 
-    state, reward, done, _ = env.step(action)
+for epoch in range(EPOCHS):
+    done = False
+    cost = 0
+    try:
+        eps = next(eps_iter)
+    except StopIteration:
+        eps = 0
+    old_state = env.reset()
 
-    # print(state)  # [Position, velocity]
-    # print("reward:", reward)
-    cost += reward
-    env.render()
-    time.sleep(0.005)
+    if not epoch % 100:
+        agent.train(True)
 
-    if done:
-        break
-print(f"Total cost: {cost}")
-# with tf.compat.v1.Session(config=config) as sess:
-#     time.sleep(5)
+    while not done:
 
+        # Preparated Actions
+        # if not x % interval:
+        #     flag ^= True
+        #     interval += interval + 7 + interval // 7
+        #     print("Flip", f"next interval: {interval}")
+        # action = 0 if flag else 2
+        if np.random.random() < eps:
+            action = np.random.randint(0, action_space)
+        else:
+            _pred = np.array(old_state).reshape(1, -1)
+            predictions = agent.model.predict(_pred)
+            action = np.argmax(predictions)
 
+        new_state, reward, done, _ = env.step(action)
+        new_transition = (old_state, action, new_state, reward, done)
+        agent.update_replay_memory(new_transition)
+
+        cost += reward
+        # env.render()
+        # time.sleep(0.005)
+
+        if done:
+            break
+
+        old_state = new_state
+    print(f"Epoch {epoch:^3} finished with cost: {cost:^9}, eps: {eps:^5}")
+
+# print(state)  # [Position, velocity]
 print("Session closed.")
+
