@@ -4,12 +4,11 @@ from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.optimizers import Adam
 from collections import deque
 
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
-import time
 import datetime
 import random
-import matplotlib.pyplot as plt
 import gym
 import os
 
@@ -19,23 +18,28 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 20
+SIM_COUNT = 25
+
+MODEL_NAME = "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
+LOAD = True
 
 REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
 MINIBATCH_SIZE = 1024
 DISCOUNT = 0.98
-LR = 0.01
+LR = 0.1
+AGENT_LR = 0.01
+STATE_OFFSET = 0
 
-EPOCHS = 150
+EPOCHS = 500
 INITIAL_EPS = 0.6
 END_EPS = 0
-EPS_END_AT = 50
+EPS_END_AT = 49
 
+SHOW_EVERY = 25
+TRAIN_EVERY = 1
+CLONE_EVERY_TRAIN = 5
 
-MODEL_NAME = "Relu32-Relu32-SoftMaxOut-"
-SHOW_EVERY = EPOCHS // 4
-TRAIN_EVERY = 5
 SHOW_LAST = False
 
 
@@ -83,8 +87,8 @@ class DQNAgent:
         self.name = f"{MODEL_NAME}--{dt.tm_mon}-{dt.tm_mday}--{dt.tm_hour}-{dt.tm_min}-{dt.tm_sec}"
 
         # Target model this is what we predict against every step
-        self.target_model = self.create_model()
-        self.target_model.set_weights(self.model.get_weights())
+        self.train_model = self.create_model()
+        self.train_model.set_weights(self.model.get_weights())
 
         self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
         # self.modifier_tensorboard = ModifiedTensorBoard(log_dir=f"logs/{MODEL_NAME}-{int(time.time())}")
@@ -96,15 +100,12 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 # Flatten(),
-                Dense(32, activation='relu', input_shape=self.observation_space_vals),
+                Dense(32, activation='linear', input_shape=self.observation_space_vals),
                 Dropout(0.2),
-                Dense(32, activation='relu'),
-
-                # Flatten(),
-
-                Dense(self.action_space_size, activation='softmax')
+                Dense(64, activation='relu'),
+                Dense(self.action_space_size, activation='linear')
         ])
-        model.compile(optimizer=Adam(lr=LR),
+        model.compile(optimizer=Adam(lr=AGENT_LR),
                       loss="mse",
                       metrics=['accuracy'])
 
@@ -114,13 +115,15 @@ class DQNAgent:
         self.replay_memory.append(transition)
 
     def save_model(self):
-        self.model.save_weights("models/last_model", overwrite=True)
+        self.model.save_weights(f"models/{MODEL_NAME}", overwrite=True)
 
     def load_model(self):
-        if os.path.isfile("models/last_model.index"):
-            print("Loading model")
-            self.model.load_weights("models/last_model")
-            self.target_model.load_weights("models/last_model")
+        if LOAD and os.path.isfile(f"models/{MODEL_NAME}.index"):
+            print(f"Loading model: {MODEL_NAME}")
+            self.model.load_weights(f"models/{MODEL_NAME}")
+            self.train_model.load_weights(f"models/{MODEL_NAME}")
+        else:
+            print(f"New model: {MODEL_NAME}")
 
     def get_sq(self, state):
         sq = self.model.predict(
@@ -139,11 +142,11 @@ class DQNAgent:
         new_states = np.array([transition[2] for transition in memory])
 
         current_qs_list = self.model.predict(old_states)
-        future_qs_list = self.target_model.predict(new_states)
+        future_qs_list = self.model.predict(new_states)
 
         X = []
         y = []
-
+        diffs = []
         for index, (old_state, action, new_state, reward, done) in enumerate(memory):
             if not done:
                 max_future_q = np.max(future_qs_list[index])
@@ -153,6 +156,10 @@ class DQNAgent:
                 new_q = reward
 
             old_qs = current_qs_list[index]
+
+            new_q = old_qs[action] * (1 - LR) + LR * new_q
+            diffs.append(old_qs[action]-new_q)
+
             old_qs[action] = new_q
 
             X.append(old_state)
@@ -160,21 +167,22 @@ class DQNAgent:
 
         X = np.array(X)
         y = np.array(y)
-        history = self.model.fit(
+        history = self.train_model.fit(
                 X, y,
                 verbose=0, shuffle=False, epochs=1,
                 batch_size=64
                 # callbacks=[self.tensorboard]
         )
-        print(f"Train done. Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}")
+        print(f"Train. Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
+              f"Min q-diff: {np.min(diffs):>5.5f}, Max q-diff: {np.max(diffs):>5.5f}")
         if terminal_state:
             self.target_update_counter += 1
 
-        # if self.target_update_counter > UPDATE_TARGET_EVERY:
-        self.target_model.set_weights(self.model.get_weights())
-        self.target_update_counter = 0
-
-        self.save_model()
+        if self.target_update_counter > CLONE_EVERY_TRAIN:
+            print("Update weights")
+            self.model.set_weights(self.train_model.get_weights())
+            self.target_update_counter = 0
+            self.save_model()
 
 
 ENVS = []
@@ -206,7 +214,8 @@ for epoch in range(EPOCHS):
 
     New_states = []
     for env in Envs:
-        New_states.append(env.reset())
+        state = env.reset() + STATE_OFFSET
+        New_states.append(state)
     New_states = np.array(New_states)
 
     if not epoch % TRAIN_EVERY:
@@ -227,14 +236,19 @@ for epoch in range(EPOCHS):
         eps = 0
         if SHOW_LAST:
             input("Last agent...")
+    step = 0
 
     while True:
+        step += 1
         # Preparated Actions
         # if not x % interval:
         #     flag ^= True
         #     interval += interval + 7 + interval // 7
         #     print("Flip", f"next interval: {interval}")
         # action = 0 if flag else 2
+
+        # if step == 100:
+        #     print("step 100")
         Done = [False] * len(Envs)
 
         Old_states = np.array(New_states)
@@ -242,14 +256,17 @@ for epoch in range(EPOCHS):
         New_states = []
 
         if np.random.random() < eps:
-            Actions = [np.random.randint(0, action_space)] * len(Envs)
+            Actions = np.random.randint(0, action_space, len(Envs))
         else:
+
             Old_states = np.array(Old_states).reshape(-1, 2)
             Predictions = agent.model.predict(Old_states)
             Actions = np.argmax(Predictions, axis=1)
 
         for index, env in enumerate(Envs):
             new_state, reward, done, _ = env.step(Actions[index])
+            new_state += STATE_OFFSET
+
             if abs(new_state[1]) > 0.001:
                 reward += 0.2
 
@@ -270,8 +287,10 @@ for epoch in range(EPOCHS):
             New_states.append(new_state)
 
             if index == 0 and render:
+                arrow = "<" if Actions[0] == 0 else "!" if Actions[0] == 1 else ">"
+                print(arrow, end='')
                 env.render()
-                time.sleep(0.001)
+                # time.sleep(0.001)
 
         for ind_d in range(len(Envs)-1, -1, -1):
             # print(ind_d)
@@ -285,18 +304,25 @@ for epoch in range(EPOCHS):
                 Envs.pop(ind_d)
                 New_states.pop(ind_d)
 
+        if len(New_states) == 1:
+            print("its one")
+
+        elif len(New_states) == 2:
+            pass
+
         if len(Envs) <= 0:
             break
+    if render:
+        print()
 
     average.append(full_cost/SIM_COUNT)
     eps_graph.append(eps)
 
-    print(f"Epoch {epoch:^3} finished, with average: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
-    print(" = ="*10)
+    print(f"Epoch {epoch:^3} end. Average: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
 
 plt.figure(figsize=(16, 9))
 plt.subplot(211)
-plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, edgecolors='m', label="Cost")
+plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, color='m', label="Cost")
 plt.plot(average, label="Average", color="r")
 plt.legend(loc='best')
 plt.grid()
@@ -311,5 +337,5 @@ plt.grid()
 plt.suptitle(f"{agent.name}")
 plt.savefig(f"{agent.name}.png")
 plt.show()
-print("Session closed.")
+print(f"End: {agent.name}.")
 

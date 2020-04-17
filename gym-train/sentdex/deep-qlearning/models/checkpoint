@@ -1,2 +1,2 @@
-model_checkpoint_path: "last_model"
-all_model_checkpoint_paths: "last_model"
+model_checkpoint_path: "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
+all_model_checkpoint_paths: "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
