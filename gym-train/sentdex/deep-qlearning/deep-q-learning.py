@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatte
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.optimizers import Adam
 from collections import deque
+from show_model_weights import show_model
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -39,7 +40,7 @@ END_EPS = 0
 EPS_END_AT = 48
 
 SHOW_EVERY = 25
-TRAIN_EVERY = 2
+TRAIN_EVERY = 1
 CLONE_EVERY_TRAIN = 5
 
 SHOW_LAST = False
@@ -190,10 +191,11 @@ class DQNAgent:
             self.target_update_counter += 1
 
         if self.target_update_counter > CLONE_EVERY_TRAIN:
-            print("Update weights")
+            print("Update weights, save model, save picture")
             self.model.set_weights(self.train_model.get_weights())
             self.target_update_counter = 0
             self.save_model()
+            show_model(self.model.get_weights(), model_name=MODEL_NAME)
 
         return diff_min, diff_max, diff_avg
 

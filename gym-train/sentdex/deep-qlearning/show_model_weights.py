@@ -56,7 +56,7 @@ def show_model(input_weights: '2d list of layers weights', model_name=None):
                 line_color = 'r' if interp < 0 else 'g'
                 x = [Node_map[index][n_i][0], Node_map[index+1][w_i][0]]
                 y = [Node_map[index][n_i][1], Node_map[index+1][w_i][1]]
-                plt.plot(x, y, linewidth=abs(interp)/2, alpha=abs(interp)*0.8, color=line_color)
+                plt.plot(x, y, linewidth=abs(interp)**2, alpha=abs(interp)*0.8, color=line_color)
 
             plt.scatter(Node_map[index][n_i][0], Node_map[index][n_i][1], marker='o', s=150, edgecolors='k', c=color)
 
