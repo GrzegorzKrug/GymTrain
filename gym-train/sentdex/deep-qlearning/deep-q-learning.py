@@ -19,26 +19,31 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 5
-REPLAY_MEMORY_SIZE = 10 * SIM_COUNT * 200
+SIM_COUNT = 10
+REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
-MINIBATCH_SIZE = 164 * SIM_COUNT
 DISCOUNT = 0.9
 
 # LR = 0.05
+MINIBATCH_SIZE = 300 * SIM_COUNT
 AGENT_LR = 0.0001
+MORE_REWARDS = True
 
-MODEL_NAME = "Relu32-Relu32-LinOut-1e4-B_128_NoSpeedReward-NoNormalize"
+MODEL_NAME = "Relu32-Relu32-LinOut-1e4-B_128_NoSpeedReward-NoNormalize_speed_reward"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
 STATE_OFFSET = 0
-EPOCHS = 200
-INITIAL_EPS = 0.9
+EPOCHS = 100
+INITIAL_EPS = 0.7
+INITIAL_SMALL_EPS = 0.1
 END_EPS = -0.1
-EPS_END_AT = EPOCHS // 4
 
-SHOW_EVERY = 25
+EPS_END_AT = EPOCHS // 3
+
+SHOW_EVERY = EPOCHS // 20
+if SHOW_EVERY < 25:
+    SHOW_EVERY = 25
 TRAIN_EVERY = 1
 CLONE_EVERY_TRAIN = 5
 
@@ -185,8 +190,8 @@ class DQNAgent:
         diff_max = np.max(diffs)
         diff_avg = np.mean(diffs)
 
-        print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
-              f"Q-diff Min: {diff_min:>5.5f}, Avg: {diff_avg:>5.5f}, Max: {diff_max:>5.5f}")
+        # print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
+        #       f"Q-diff Min: {diff_min:>5.5f}, Avg: {diff_avg:>5.5f}, Max: {diff_max:>5.5f}")
         if terminal_state:
             self.target_update_counter += 1
 
@@ -194,8 +199,8 @@ class DQNAgent:
             self.model.set_weights(self.train_model.get_weights())
             self.target_update_counter = 0
             self.save_model()
-            show_model(self.model.get_weights(), model_name=MODEL_NAME)
-            print("Update weights, save model, save picture done.")
+            # show_model(self.model.get_weights(), model_name=MODEL_NAME)
+            # print("Update weights, save model, save picture done.")
 
         return diff_min, diff_max, diff_avg
 
@@ -225,7 +230,7 @@ diff_x = []
 diff_min = []
 diff_max = []
 diff_avg = []
-Predicts = [[], [], []]
+Predicts = [[], [], [], []]
 
 for epoch in range(EPOCHS):
     Cost = [0] * SIM_COUNT
@@ -251,14 +256,21 @@ for epoch in range(EPOCHS):
 
     if not epoch % SHOW_EVERY:
         render = True
-        eps = 0
+        if epoch == 0:
+            eps = 0
     else:
         render = False
-        try:
-            eps = next(eps_iter)
-        except StopIteration:
-            eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
-            eps = 0
+        if epoch < EPOCHS // 4:
+            # if epoch < EPOCHS / 2:
+            eps = 1.0
+            # else:
+            #     eps = 0.8
+        else:
+            try:
+                eps = next(eps_iter)
+            except StopIteration:
+                eps_iter = iter(np.linspace(INITIAL_SMALL_EPS, END_EPS, EPS_END_AT))
+                eps = 0
     if epoch == EPOCHS - 1:
         render = True
         eps = 0
@@ -283,15 +295,17 @@ for epoch in range(EPOCHS):
 
         New_states = []
 
-        if np.random.random() < eps:
+        if np.random.random() <= eps:
             Actions = np.random.randint(0, action_space, len(Envs))
         else:
 
             Old_states = np.array(Old_states).reshape(-1, 2)
             predictions = agent.model.predict(Old_states)
-            Predicts[0].append(predictions[0][0])
-            Predicts[1].append(predictions[0][1])
-            Predicts[2].append(predictions[0][2])
+            if step < 10 and epoch != 0:
+                Predicts[0].append(predictions[0][0])
+                Predicts[1].append(predictions[0][1])
+                Predicts[2].append(predictions[0][2])
+                Predicts[3].append(epoch)
 
             Actions = np.argmax(predictions, axis=1)
 
@@ -299,14 +313,15 @@ for epoch in range(EPOCHS):
             new_state, reward, done, _ = env.step(Actions[index])
             # new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
 
-            # if abs(new_state[1]) > 0.6:
-            #     reward += 0.2
-            #
-            # if abs(new_state[1]) > 0.8:
-            #     reward += 0.4
-            #
-            # reward -= 0.2
-            # reward -= 0.4
+            if MORE_REWARDS:
+                if abs(new_state[1]) > 0.001:
+                    reward += 0.2
+
+                if abs(new_state[1]) > 0.004:
+                    reward += 0.4
+
+                reward -= 0.2
+                reward -= 0.4
 
             # else:
             #     print(new_state)
@@ -332,8 +347,11 @@ for epoch in range(EPOCHS):
                     print()
                     render = False
                 full_cost += Cost[ind_d]
+                if Cost[ind_d] > -200:
+                    print("GOAL REACHED!")
                 x_graph.append(epoch)
                 y_graph.append(Cost[ind_d])
+
                 Cost.pop(ind_d)
                 Envs.pop(ind_d)
                 New_states.pop(ind_d)
@@ -352,32 +370,36 @@ for epoch in range(EPOCHS):
 
     print(f"Epoch {epoch:^3} end. Average: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
 
+agent.save_model()
+
 plt.figure(figsize=(16, 9))
-plt.subplot(411)
+plt.subplot(311)
 plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, color='m', label="Cost")
 plt.plot(average, label="Average", color="r")
 plt.legend(loc='best')
 plt.grid()
 
-plt.subplot(412)
+plt.subplot(312)
 plt.plot(eps_graph, label="Epsilon")
 plt.legend(loc='best')
-plt.xlabel("Epochs")
+plt.xlabel("Epoch")
 plt.grid()
 
-plt.subplot(413)
-plt.plot(diff_x, diff_min, label="q-diff Min")
-plt.plot(diff_x, diff_max, label="q-diff Max")
-plt.plot(diff_x, diff_avg, label="q-diff Avg")
-plt.legend(loc='best')
-plt.grid()
+# plt.subplot(413)
+# plt.plot(diff_x, diff_min, label="q-diff Min")
+# plt.plot(diff_x, diff_max, label="q-diff Max")
+# plt.plot(diff_x, diff_avg, label="q-diff Avg")
+# plt.legend(loc='best')
+# plt.grid()
 
-plt.subplot(414)
-plt.plot(Predicts[0], label="Q-0", c='g', alpha=0.5)
-plt.plot(Predicts[1], label="Q-1", c='r', alpha=0.5)
-plt.plot(Predicts[2], label="Q-2", c='b', alpha=0.5)
+plt.subplot(313)
+x_pred = range(len(Predicts[0]))
+
+plt.scatter(Predicts[3], Predicts[0], label="Q-0(green)", c='g', alpha=0.4, s=10, marker='s')
+plt.scatter(Predicts[3], Predicts[1], label="Q-1(red)", c='r', alpha=0.3, s=10, marker='s')
+plt.scatter(Predicts[3], Predicts[2], label="Q-2(blue)", c='b', alpha=0.2, s=10, marker='s')
 plt.legend(loc='best')
-plt.xlabel("Samples")
+plt.xlabel("Epoch")
 plt.grid()
 
 plt.subplots_adjust(hspace=0.4)
