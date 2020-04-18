@@ -26,15 +26,15 @@ DISCOUNT = 0.9
 
 # LR = 0.05
 MINIBATCH_SIZE = 300 * SIM_COUNT
-AGENT_LR = 0.0001
+AGENT_LR = 0.0003
 MORE_REWARDS = True
 
-MODEL_NAME = "Relu32-Relu32-LinOut-1e4-B_128_NoSpeedReward-NoNormalize_speed_reward"
+MODEL_NAME = "Relu32-Drop0_2-Relu32-LinOut-1e4-B_300-Speed_reward"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
 STATE_OFFSET = 0
-EPOCHS = 100
+EPOCHS = 300
 INITIAL_EPS = 0.7
 INITIAL_SMALL_EPS = 0.1
 END_EPS = -0.1
@@ -115,7 +115,7 @@ class DQNAgent:
         model = Sequential([
                 Flatten(input_shape=self.observation_space_vals),
                 Dense(32, activation='relu', ),
-                # Dropout(0.2),
+                Dropout(0.2),
                 Dense(32, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
         ])
@@ -322,9 +322,6 @@ for epoch in range(EPOCHS):
 
                 reward -= 0.2
                 reward -= 0.4
-
-            # else:
-            #     print(new_state)
 
             new_transition = (Old_states[index], Actions[index], new_state, reward, done)
             agent.update_replay_memory(new_transition)
