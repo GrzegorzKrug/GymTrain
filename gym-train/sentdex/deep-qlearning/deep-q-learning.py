@@ -22,7 +22,7 @@ sess = tf.compat.v1.Session(config=config)
 SIM_COUNT = 5
 REPLAY_MEMORY_SIZE = 10 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
-MINIBATCH_SIZE = 128
+MINIBATCH_SIZE = 164 * SIM_COUNT
 DISCOUNT = 0.9
 
 # LR = 0.05
@@ -35,7 +35,7 @@ LOAD = True
 STATE_OFFSET = 0
 EPOCHS = 200
 INITIAL_EPS = 0.9
-END_EPS = 0
+END_EPS = -0.1
 EPS_END_AT = EPOCHS // 4
 
 SHOW_EVERY = 25
@@ -191,11 +191,11 @@ class DQNAgent:
             self.target_update_counter += 1
 
         if self.target_update_counter > CLONE_EVERY_TRAIN:
-            print("Update weights, save model, save picture")
             self.model.set_weights(self.train_model.get_weights())
             self.target_update_counter = 0
             self.save_model()
             show_model(self.model.get_weights(), model_name=MODEL_NAME)
+            print("Update weights, save model, save picture done.")
 
         return diff_min, diff_max, diff_avg
 
@@ -338,11 +338,11 @@ for epoch in range(EPOCHS):
                 Envs.pop(ind_d)
                 New_states.pop(ind_d)
 
-        if len(New_states) == 1:
-            print("its one")
-
-        elif len(New_states) == 2:
-            pass
+        # if len(New_states) == 1:
+        #     print("its one")
+        #
+        # elif len(New_states) == 2:
+        #     pass
 
         if len(Envs) <= 0:
             break
