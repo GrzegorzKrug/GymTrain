@@ -19,25 +19,24 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 30
-
-MODEL_NAME = "Relu32-Relu32-LinOut-1e3"
-os.makedirs(MODEL_NAME, exist_ok=True)
-LOAD = True
-
+SIM_COUNT = 5
 REPLAY_MEMORY_SIZE = 10 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
-MINIBATCH_SIZE = 2000
+MINIBATCH_SIZE = 128
 DISCOUNT = 0.9
 
 # LR = 0.05
-AGENT_LR = 0.01
-STATE_OFFSET = 0
+AGENT_LR = 0.0001
 
+MODEL_NAME = "Relu32-Relu32-LinOut-1e4-B_128_NoSpeedReward-NoNormalize"
+os.makedirs(MODEL_NAME, exist_ok=True)
+LOAD = True
+
+STATE_OFFSET = 0
 EPOCHS = 200
-INITIAL_EPS = 0.7
+INITIAL_EPS = 0.9
 END_EPS = 0
-EPS_END_AT = 48
+EPS_END_AT = EPOCHS // 4
 
 SHOW_EVERY = 25
 TRAIN_EVERY = 1
@@ -46,10 +45,11 @@ CLONE_EVERY_TRAIN = 5
 SHOW_LAST = False
 
 
-def state_normalize(state, min_list, max_list):
-    state -= min_list
-    state = state / (max_list - min_list)
-    return state
+# def state_normalize(state, min_list, max_list):
+#     # return state
+#     state -= min_list
+#     state = state / (max_list - min_list)
+#     return state
 
 
 # # Own Tensorboard class
@@ -109,7 +109,7 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 Flatten(input_shape=self.observation_space_vals),
-                Dense(32, activation='linear', ),
+                Dense(32, activation='relu', ),
                 # Dropout(0.2),
                 Dense(32, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
@@ -176,8 +176,8 @@ class DQNAgent:
         y = np.array(y)
         history = self.train_model.fit(
                 X, y,
-                verbose=0, shuffle=False, epochs=1,
-                batch_size=64
+                verbose=0, shuffle=False, epochs=1
+                # batch_size=64
                 # callbacks=[self.tensorboard]
         )
 
@@ -186,7 +186,7 @@ class DQNAgent:
         diff_avg = np.mean(diffs)
 
         print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
-              f"Q-diff Min: {diff_min:>5.5f}, Max: {diff_max:>5.5f}, Avg: {diff_avg:>5.5f}")
+              f"Q-diff Min: {diff_min:>5.5f}, Avg: {diff_avg:>5.5f}, Max: {diff_max:>5.5f}")
         if terminal_state:
             self.target_update_counter += 1
 
@@ -235,7 +235,7 @@ for epoch in range(EPOCHS):
     New_states = []
     for env in Envs:
         state = env.reset()
-        state = state_normalize(state, OBS_LOW, OBS_HIGH)
+        # state = state_normalize(state, OBS_LOW, OBS_HIGH)
         New_states.append(state)
     New_states = np.array(New_states)
 
@@ -297,16 +297,16 @@ for epoch in range(EPOCHS):
 
         for index, env in enumerate(Envs):
             new_state, reward, done, _ = env.step(Actions[index])
-            new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
+            # new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
 
-            if abs(new_state[1]) > 0.6:
-                reward += 0.2
+            # if abs(new_state[1]) > 0.6:
+            #     reward += 0.2
             #
-            if abs(new_state[1]) > 0.8:
-                reward += 0.4
+            # if abs(new_state[1]) > 0.8:
+            #     reward += 0.4
             #
-            reward -= 0.2
-            reward -= 0.4
+            # reward -= 0.2
+            # reward -= 0.4
 
             # else:
             #     print(new_state)
@@ -327,8 +327,10 @@ for epoch in range(EPOCHS):
 
         for ind_d in range(len(Envs)-1, -1, -1):
             if Done[ind_d]:
-                if ind_d == 0:
+                if ind_d == 0 and render:
                     Envs[0].close()
+                    print()
+                    render = False
                 full_cost += Cost[ind_d]
                 x_graph.append(epoch)
                 y_graph.append(Cost[ind_d])
@@ -344,8 +346,6 @@ for epoch in range(EPOCHS):
 
         if len(Envs) <= 0:
             break
-    if render:
-        print()
 
     average.append(full_cost/SIM_COUNT)
     eps_graph.append(eps)
