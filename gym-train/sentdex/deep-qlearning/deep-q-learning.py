@@ -19,19 +19,19 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 10
+SIM_COUNT = 30
 
-MODEL_NAME = "Lin16-Drop0_2-Relu32-LinOut-1e3"
+MODEL_NAME = "Relu32-Relu32-LinOut-1e3"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
-REPLAY_MEMORY_SIZE = 15 * SIM_COUNT * 200
+REPLAY_MEMORY_SIZE = 10 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
 MINIBATCH_SIZE = 2000
-DISCOUNT = 0.98
+DISCOUNT = 0.9
 
 # LR = 0.05
-AGENT_LR = 0.001
+AGENT_LR = 0.01
 STATE_OFFSET = 0
 
 EPOCHS = 200
@@ -108,10 +108,10 @@ class DQNAgent:
 
     def create_model(self):
         model = Sequential([
-                # Flatten(),
-                Dense(16, activation='linear', input_shape=self.observation_space_vals),
-                Dropout(0.2),
-                Dense(32, activation='relu'),
+                Flatten(input_shape=self.observation_space_vals),
+                Dense(32, activation='linear', ),
+                # Dropout(0.2),
+                Dense(32, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=AGENT_LR),
@@ -320,6 +320,7 @@ for epoch in range(EPOCHS):
 
             if index == 0 and render:
                 arrow = "<" if Actions[0] == 0 else "!" if Actions[0] == 1 else ">"
+                # print(new_state[1])
                 print(arrow, end='')
                 env.render()
                 # time.sleep(0.001)

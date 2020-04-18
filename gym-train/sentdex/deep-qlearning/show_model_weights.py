@@ -81,6 +81,7 @@ def show_model(input_weights: '2d list of layers weights', model_name=None):
         pic_name = f"{name}/weights/{counter}.png"
 
     plt.savefig(pic_name)
+    plt.close()
     print(f"Saved weights to {pic_name}")
     return pic_name
 
