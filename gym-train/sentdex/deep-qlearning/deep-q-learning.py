@@ -20,20 +20,21 @@ sess = tf.compat.v1.Session(config=config)
 
 SIM_COUNT = 10
 
-MODEL_NAME = "Lin16-Drop0_2-Relu32-LinOut-1e4-"
+MODEL_NAME = "Lin16-Drop0_2-Relu32-LinOut-1e3"
+os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
-REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
+REPLAY_MEMORY_SIZE = 15 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
 MINIBATCH_SIZE = 2000
 DISCOUNT = 0.98
 
 # LR = 0.05
-AGENT_LR = 0.0001
+AGENT_LR = 0.001
 STATE_OFFSET = 0
 
-EPOCHS = 2000
-INITIAL_EPS = 0.4
+EPOCHS = 200
+INITIAL_EPS = 0.7
 END_EPS = 0
 EPS_END_AT = 48
 
@@ -50,36 +51,36 @@ def state_normalize(state, min_list, max_list):
     return state
 
 
-# Own Tensorboard class
-class ModifiedTensorBoard(TensorBoard):
-    # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.step = 1
-        self.writer = tf.summary
-
-    # Overriding this method to stop creating default log writer
-    def set_model(self, model):
-        pass
-
-    # Overridden, saves logs with our step number
-    # (otherwise every .fit() will start writing from 0th step)
-    def on_epoch_end(self, epoch, logs=None):
-        self.update_stats(**logs)
-
-    # Overridden
-    # We train for one batch only, no need to save anything at batch end
-    def on_batch_end(self, batch, logs=None):
-        pass
-
-    # Overridden, so won't close writer
-    def on_train_end(self, _):
-        pass
-
-    # Custom method for saving own metrics
-    # Creates writer, writes custom metrics and closes writer
-    def update_stats(self, **stats):
-        self._write_logs(stats, self.step)
+# # Own Tensorboard class
+# class ModifiedTensorBoard(TensorBoard):
+#     # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self.step = 1
+#         self.writer = tf.summary
+#
+#     # Overriding this method to stop creating default log writer
+#     def set_model(self, model):
+#         pass
+#
+#     # Overridden, saves logs with our step number
+#     # (otherwise every .fit() will start writing from 0th step)
+#     def on_epoch_end(self, epoch, logs=None):
+#         self.update_stats(**logs)
+#
+#     # Overridden
+#     # We train for one batch only, no need to save anything at batch end
+#     def on_batch_end(self, batch, logs=None):
+#         pass
+#
+#     # Overridden, so won't close writer
+#     def on_train_end(self, _):
+#         pass
+#
+#     # Custom method for saving own metrics
+#     # Creates writer, writes custom metrics and closes writer
+#     def update_stats(self, **stats):
+#         self._write_logs(stats, self.step)
 
 
 class DQNAgent:
@@ -122,13 +123,13 @@ class DQNAgent:
         self.replay_memory.append(transition)
 
     def save_model(self):
-        self.model.save_weights(f"models/{MODEL_NAME}", overwrite=True)
+        self.model.save_weights(f"{MODEL_NAME}/model", overwrite=True)
 
     def load_model(self):
-        if LOAD and os.path.isfile(f"models/{MODEL_NAME}.index"):
+        if LOAD and os.path.isfile(f"{MODEL_NAME}/model.index"):
             print(f"Loading model: {MODEL_NAME}")
-            self.model.load_weights(f"models/{MODEL_NAME}")
-            self.train_model.load_weights(f"models/{MODEL_NAME}")
+            self.model.load_weights(f"{MODEL_NAME}/model")
+            self.train_model.load_weights(f"{MODEL_NAME}/model")
         else:
             print(f"New model: {MODEL_NAME}")
 
@@ -158,12 +159,10 @@ class DQNAgent:
             if not done:
                 max_future_q = np.max(future_qs_list[index])
                 new_q = reward + DISCOUNT * max_future_q
-
             else:
                 new_q = reward
 
             old_qs = current_qs_list[index]
-
             # new_q = old_qs[action] * (1 - LR) + LR * new_q
             diffs.append(old_qs[action]-new_q)
 
@@ -180,8 +179,13 @@ class DQNAgent:
                 batch_size=64
                 # callbacks=[self.tensorboard]
         )
+
+        diff_min = np.min(diffs)
+        diff_max = np.max(diffs)
+        diff_avg = np.mean(diffs)
+
         print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
-              f"Q-diff Min: {np.min(diffs):>5.5f}, Max: {np.max(diffs):>5.5f}, Avg: {np.mean(diffs):>5.5f}")
+              f"Q-diff Min: {diff_min:>5.5f}, Max: {diff_max:>5.5f}, Avg: {diff_avg:>5.5f}")
         if terminal_state:
             self.target_update_counter += 1
 
@@ -190,6 +194,8 @@ class DQNAgent:
             self.model.set_weights(self.train_model.get_weights())
             self.target_update_counter = 0
             self.save_model()
+
+        return diff_min, diff_max, diff_avg
 
 
 ENVS = []
@@ -205,17 +211,19 @@ OBS_LOW = ENVS[0].observation_space.low
 agent = DQNAgent(
         observation_space_vals=obs_space,
         action_space_size=action_space,
-        mini_batch_size=MINIBATCH_SIZE
-)
-
-
+        mini_batch_size=MINIBATCH_SIZE)
 eps_iter = iter(np.linspace(INITIAL_EPS, END_EPS, EPS_END_AT))
 
 x_graph = []
 y_graph = []
 average = []
 eps_graph = []
-# Diffs = [[], []]
+
+diff_x = []
+diff_min = []
+diff_max = []
+diff_avg = []
+Predicts = [[], [], []]
 
 for epoch in range(EPOCHS):
     Cost = [0] * SIM_COUNT
@@ -230,7 +238,14 @@ for epoch in range(EPOCHS):
     New_states = np.array(New_states)
 
     if not epoch % TRAIN_EVERY:
-        agent.train(True)
+        pack = agent.train(True)
+
+        if pack:
+            dmin, dmax, davg = pack
+            diff_x.append(epoch)
+            diff_min.append(dmin)
+            diff_max.append(dmax)
+            diff_avg.append(davg)
 
     if not epoch % SHOW_EVERY:
         render = True
@@ -271,8 +286,12 @@ for epoch in range(EPOCHS):
         else:
 
             Old_states = np.array(Old_states).reshape(-1, 2)
-            Predictions = agent.model.predict(Old_states)
-            Actions = np.argmax(Predictions, axis=1)
+            predictions = agent.model.predict(Old_states)
+            Predicts[0].append(predictions[0][0])
+            Predicts[1].append(predictions[0][1])
+            Predicts[2].append(predictions[0][2])
+
+            Actions = np.argmax(predictions, axis=1)
 
         for index, env in enumerate(Envs):
             new_state, reward, done, _ = env.step(Actions[index])
@@ -281,11 +300,11 @@ for epoch in range(EPOCHS):
             if abs(new_state[1]) > 0.6:
                 reward += 0.2
             #
-            # if abs(new_state[1]) > 0.003:
-            #     reward += 0.4
+            if abs(new_state[1]) > 0.8:
+                reward += 0.4
             #
             reward -= 0.2
-            # reward -= 0.4
+            reward -= 0.4
 
             # else:
             #     print(new_state)
@@ -331,24 +350,37 @@ for epoch in range(EPOCHS):
     print(f"Epoch {epoch:^3} end. Average: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
 
 plt.figure(figsize=(16, 9))
-plt.subplot(311)
+plt.subplot(411)
 plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, color='m', label="Cost")
 plt.plot(average, label="Average", color="r")
 plt.legend(loc='best')
 plt.grid()
 
-plt.subplot(312)
+plt.subplot(412)
 plt.plot(eps_graph, label="Epsilon")
 plt.legend(loc='best')
 plt.xlabel("Epochs")
 plt.grid()
 
-# plt.subplot(313)
-# plt.plot(Diffs[0], Diffs[1])
+plt.subplot(413)
+plt.plot(diff_x, diff_min, label="q-diff Min")
+plt.plot(diff_x, diff_max, label="q-diff Max")
+plt.plot(diff_x, diff_avg, label="q-diff Avg")
+plt.legend(loc='best')
+plt.grid()
 
+plt.subplot(414)
+plt.plot(Predicts[0], label="Q-0", c='g', alpha=0.5)
+plt.plot(Predicts[1], label="Q-1", c='r', alpha=0.5)
+plt.plot(Predicts[2], label="Q-2", c='b', alpha=0.5)
+plt.legend(loc='best')
+plt.xlabel("Samples")
+plt.grid()
 
+plt.subplots_adjust(hspace=0.4)
 plt.suptitle(f"{agent.name}")
-plt.savefig(f"{agent.name}.png")
+
+plt.savefig(f"{MODEL_NAME}/{agent.name}.png")
 plt.show()
 print(f"End: {agent.name}.")
 

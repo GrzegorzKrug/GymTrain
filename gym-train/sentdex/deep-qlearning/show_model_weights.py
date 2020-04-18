@@ -1,26 +1,21 @@
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.utils import plot_model
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
 import os
 
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = False
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
-sess = tf.compat.v1.Session(config=config)
 
+MODEL_NAME = "Lin16-Drop0_2-Relu32-LinOut-1e3"
 
-MODEL_NAME = "Lin32-Drop0_2-Relu32-LinearOut-LR0_05-"
 FIG_SIZE = (16, 9)
 INPUT = 2
 OUTPUT = 3
 
 
-def show_model(input_weights: '2d list of layers weights'):
+def show_model(input_weights: '2d list of layers weights', model_name=None):
     fig = plt.figure(figsize=FIG_SIZE)
     # ax = fig.add_subplot(111)
     bias = False
@@ -71,27 +66,29 @@ def show_model(input_weights: '2d list of layers weights'):
     dist = 64
     plt.xlim([-5, 2*dist])
     plt.ylim([-dist, dist])
-    # ax.spines['top'].set_visible(False)
-    # ax.spines['right'].set_visible(False)
-    # ax.spines['left'].set_visible(False)
     plt.axis('off')
+    if model_name:
+        name = model_name
+    else:
+        name = MODEL_NAME
 
-    os.makedirs(f"{MODEL_NAME}-weights", exist_ok=True)
+    os.makedirs(f"{name}/weights", exist_ok=True)
     counter = 0
-    pic_name = f"{MODEL_NAME}-weights/0.png"
+    pic_name = f"{name}/weights/0.png"
 
     while os.path.isfile(pic_name):
         counter += 1
-        pic_name = f"{MODEL_NAME}-weights/{counter}.png"
+        pic_name = f"{name}/weights/{counter}.png"
+
     plt.savefig(pic_name)
-    # plt.show()
+    print(f"Saved weights to {pic_name}")
     return pic_name
 
 
 def create_model():
     model = Sequential([
             # Flatten(),
-            Dense(32, activation='linear', input_shape=(2,)),
+            Dense(16, activation='linear', input_shape=(2,)),
             # Dropout(0.3),
             Dense(32, activation='relu'),
             Dense(3, activation='linear')
@@ -103,10 +100,16 @@ def create_model():
     return model
 
 
-model = create_model()
-model.load_weights(f"models/{MODEL_NAME}")
+if __name__ == "__main__":
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = False
+    config.gpu_options.per_process_gpu_memory_fraction = 0.3
+    sess = tf.compat.v1.Session(config=config)
 
-weights = model.get_weights()
-pic_name = show_model(weights)
+    model = create_model()
+    model.load_weights(f"{MODEL_NAME}/model")
 
-print(f"Saved to {pic_name}")
+    weights = model.get_weights()
+    pic_name = show_model(weights)
+
+
