@@ -6,7 +6,7 @@ from tensorflow.keras.utils import plot_model
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
-
+import os
 
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = False
@@ -14,40 +14,35 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
 
-MODEL_NAME = "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
+MODEL_NAME = "Lin32-Drop0_2-Relu32-LinearOut-LR0_05-"
+FIG_SIZE = (16, 9)
 INPUT = 2
 OUTPUT = 3
 
 
 def show_model(input_weights: '2d list of layers weights'):
-    fig = plt.figure(figsize=(15, 15))
-    ax = fig.add_subplot(111)
+    fig = plt.figure(figsize=FIG_SIZE)
+    # ax = fig.add_subplot(111)
     bias = False
     Bias = []
     Weights = []
     INPUT_NODES = [[0, 2], [0, -2]]
-    # OUTPUT_NODES = [[10, -3], [10, 0], [10, 3]]
     Node_map = [INPUT_NODES]
-
-    # plt.scatter(INPUT_NODES[0][0], INPUT_NODES[0][1], marker='o', s=150, edgecolors='k', c='g')
 
     for index, layer in enumerate(input_weights):
         node_count = len(layer)
-        # print(index, bias)
         if bias:
             Bias.append(layer)
             if not index == 0:
                 Node_map.append([])
                 for node_index, node in enumerate(layer):
-                    x = index * 20 + 5
+                    x = index * 20
                     y_ratio = 2
                     y = node_index*y_ratio - node_count*y_ratio/2 + y_ratio/2
                     Node_map[-1].append([x, y])
         else:
             Weights.append(layer)
         bias ^= True
-
-    # Node_map.append(OUTPUT_NODES)
 
     for index, layer in enumerate(Weights):
         layer = Weights[index]
@@ -59,7 +54,7 @@ def show_model(input_weights: '2d list of layers weights'):
                 color = 'g'
             else:
                 color = 'w'
-            range_val = [-1, 1]  #if len(node) > 10 else [-1, 1]
+            range_val = [-1, 1]
             for w_i, weight in enumerate(node):
                 interp = np.interp(weight, [min_weight, max_weight], range_val)
                 # print(interp)
@@ -80,8 +75,17 @@ def show_model(input_weights: '2d list of layers weights'):
     # ax.spines['right'].set_visible(False)
     # ax.spines['left'].set_visible(False)
     plt.axis('off')
-    plt.savefig("picture.png")
+
+    os.makedirs(f"{MODEL_NAME}-weights", exist_ok=True)
+    counter = 0
+    pic_name = f"{MODEL_NAME}-weights/0.png"
+
+    while os.path.isfile(pic_name):
+        counter += 1
+        pic_name = f"{MODEL_NAME}-weights/{counter}.png"
+    plt.savefig(pic_name)
     # plt.show()
+    return pic_name
 
 
 def create_model():
@@ -89,7 +93,7 @@ def create_model():
             # Flatten(),
             Dense(32, activation='linear', input_shape=(2,)),
             # Dropout(0.3),
-            Dense(64, activation='relu'),
+            Dense(32, activation='relu'),
             Dense(3, activation='linear')
     ])
     model.compile(optimizer=Adam(lr=0.001),
@@ -103,8 +107,6 @@ model = create_model()
 model.load_weights(f"models/{MODEL_NAME}")
 
 weights = model.get_weights()
-show_model(weights)
+pic_name = show_model(weights)
 
-
-plot_model(model, to_file='model.png', show_shapes=True)
-print("End...")
+print(f"Saved to {pic_name}")

@@ -18,29 +18,36 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 25
+SIM_COUNT = 10
 
-MODEL_NAME = "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
+MODEL_NAME = "Lin16-Drop0_2-Relu32-LinOut-1e4-"
 LOAD = True
 
 REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
-MINIBATCH_SIZE = 1024
+MINIBATCH_SIZE = 2000
 DISCOUNT = 0.98
-LR = 0.1
-AGENT_LR = 0.01
+
+# LR = 0.05
+AGENT_LR = 0.0001
 STATE_OFFSET = 0
 
-EPOCHS = 500
-INITIAL_EPS = 0.6
+EPOCHS = 2000
+INITIAL_EPS = 0.4
 END_EPS = 0
-EPS_END_AT = 49
+EPS_END_AT = 48
 
 SHOW_EVERY = 25
-TRAIN_EVERY = 1
+TRAIN_EVERY = 2
 CLONE_EVERY_TRAIN = 5
 
 SHOW_LAST = False
+
+
+def state_normalize(state, min_list, max_list):
+    state -= min_list
+    state = state / (max_list - min_list)
+    return state
 
 
 # Own Tensorboard class
@@ -100,9 +107,9 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 # Flatten(),
-                Dense(32, activation='linear', input_shape=self.observation_space_vals),
+                Dense(16, activation='linear', input_shape=self.observation_space_vals),
                 Dropout(0.2),
-                Dense(64, activation='relu'),
+                Dense(32, activation='relu'),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=AGENT_LR),
@@ -157,7 +164,7 @@ class DQNAgent:
 
             old_qs = current_qs_list[index]
 
-            new_q = old_qs[action] * (1 - LR) + LR * new_q
+            # new_q = old_qs[action] * (1 - LR) + LR * new_q
             diffs.append(old_qs[action]-new_q)
 
             old_qs[action] = new_q
@@ -173,8 +180,8 @@ class DQNAgent:
                 batch_size=64
                 # callbacks=[self.tensorboard]
         )
-        print(f"Train. Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
-              f"Min q-diff: {np.min(diffs):>5.5f}, Max q-diff: {np.max(diffs):>5.5f}")
+        print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
+              f"Q-diff Min: {np.min(diffs):>5.5f}, Max: {np.max(diffs):>5.5f}, Avg: {np.mean(diffs):>5.5f}")
         if terminal_state:
             self.target_update_counter += 1
 
@@ -192,6 +199,8 @@ for x in range(SIM_COUNT):
 
 action_space = 3
 obs_space = (2, )
+OBS_HIGH = ENVS[0].observation_space.high
+OBS_LOW = ENVS[0].observation_space.low
 
 agent = DQNAgent(
         observation_space_vals=obs_space,
@@ -206,6 +215,7 @@ x_graph = []
 y_graph = []
 average = []
 eps_graph = []
+# Diffs = [[], []]
 
 for epoch in range(EPOCHS):
     Cost = [0] * SIM_COUNT
@@ -214,7 +224,8 @@ for epoch in range(EPOCHS):
 
     New_states = []
     for env in Envs:
-        state = env.reset() + STATE_OFFSET
+        state = env.reset()
+        state = state_normalize(state, OBS_LOW, OBS_HIGH)
         New_states.append(state)
     New_states = np.array(New_states)
 
@@ -265,16 +276,16 @@ for epoch in range(EPOCHS):
 
         for index, env in enumerate(Envs):
             new_state, reward, done, _ = env.step(Actions[index])
-            new_state += STATE_OFFSET
+            new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
 
-            if abs(new_state[1]) > 0.001:
+            if abs(new_state[1]) > 0.6:
                 reward += 0.2
-
-            if abs(new_state[1]) > 0.003:
-                reward += 0.4
-
+            #
+            # if abs(new_state[1]) > 0.003:
+            #     reward += 0.4
+            #
             reward -= 0.2
-            reward -= 0.4
+            # reward -= 0.4
 
             # else:
             #     print(new_state)
@@ -293,7 +304,6 @@ for epoch in range(EPOCHS):
                 # time.sleep(0.001)
 
         for ind_d in range(len(Envs)-1, -1, -1):
-            # print(ind_d)
             if Done[ind_d]:
                 if ind_d == 0:
                     Envs[0].close()
@@ -321,17 +331,20 @@ for epoch in range(EPOCHS):
     print(f"Epoch {epoch:^3} end. Average: {full_cost/SIM_COUNT:>3.2f}, eps: {eps:^5.3f}")
 
 plt.figure(figsize=(16, 9))
-plt.subplot(211)
+plt.subplot(311)
 plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, color='m', label="Cost")
 plt.plot(average, label="Average", color="r")
 plt.legend(loc='best')
 plt.grid()
 
-plt.subplot(212)
+plt.subplot(312)
 plt.plot(eps_graph, label="Epsilon")
 plt.legend(loc='best')
 plt.xlabel("Epochs")
 plt.grid()
+
+# plt.subplot(313)
+# plt.plot(Diffs[0], Diffs[1])
 
 
 plt.suptitle(f"{agent.name}")

@@ -1,2 +1,2 @@
-model_checkpoint_path: "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
-all_model_checkpoint_paths: "Lin32-Drop0_2-Relu64-LinearOut-lr0_01-"
+model_checkpoint_path: "Lin32-Drop0_2-Relu32-LinearOut-LR0_05-"
+all_model_checkpoint_paths: "Lin32-Drop0_2-Relu32-LinearOut-LR0_05-"
