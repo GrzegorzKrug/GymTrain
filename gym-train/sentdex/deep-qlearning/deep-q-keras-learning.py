@@ -1,9 +1,8 @@
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatten
-from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.optimizers import Adam
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatten
+from keras.callbacks import TensorBoard
+from keras.optimizers import Adam
 from collections import deque
-from show_model_weights import show_model
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -19,18 +18,18 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 10
+SIM_COUNT = 15
 REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
 DISCOUNT = 0.95
 
 # LR = 0.05
 MINIBATCH_SIZE = 300 * SIM_COUNT
-AGENT_LR = 0.00003
+AGENT_LR = 0.0001
 # AGENT_LR = 0.0001
 MORE_REWARDS = True
 
-MODEL_NAME = "Relu32-Drop0_25-Relu32-LinOut-1e4-B_300-Speed_reward"
+MODEL_NAME = "Relu32-Drop0_25-Relu32-SoloKeras-LinOut-1e4-B_300-Speed_reward"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
@@ -38,9 +37,9 @@ STATE_OFFSET = 0
 EPOCHS = 200
 INITIAL_EPS = 0.7
 INITIAL_SMALL_EPS = 0.1
-END_EPS = -0.1
+END_EPS = -0.05
 
-EPS_END_AT = EPOCHS // 4
+EPS_END_AT = EPOCHS // 5
 
 SHOW_EVERY = EPOCHS // 20
 if SHOW_EVERY < 25:
@@ -114,8 +113,8 @@ class DQNAgent:
 
     def create_model(self):
         model = Sequential([
-                Flatten(input_shape=self.observation_space_vals),
-                Dense(32, activation='relu', ),
+                # Flatten(),
+                Dense(32, activation='relu', input_shape=self.observation_space_vals),
                 Dropout(0.25),
                 Dense(32, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
@@ -271,14 +270,15 @@ for epoch in range(EPOCHS):
                 eps = next(eps_iter)
             except StopIteration:
                 eps_iter = iter(np.linspace(INITIAL_SMALL_EPS, END_EPS, EPS_END_AT))
-                eps = 0
+                eps = next(eps_iter)
+
     if epoch == EPOCHS - 1:
         render = True
         eps = 0
         if SHOW_LAST:
             input("Last agent...")
-    step = 0
 
+    step = 0
     while True:
         step += 1
         # Preparated Actions
@@ -317,7 +317,7 @@ for epoch in range(EPOCHS):
                 if abs(new_state[1]) > 0.001:
                     reward += 0.5
 
-                if abs(new_state[1]) > 0.004:
+                if abs(new_state[1]) > 0.003:
                     reward += 0.8
 
                 reward -= 0.5
@@ -394,21 +394,22 @@ plt.subplots_adjust(hspace=0.4)
 plt.savefig(f"{MODEL_NAME}/{agent.name}.png")
 
 
-plt.figure()
+plt.figure(figsize=(16, 9))
+
 if PLOT_ALL_QS:
     x_pred = range(len(Predicts[0]))
     ax = plt.subplot(311)
-    plt.scatter(x_pred, Predicts[0], label="Q-0(green)", c='g', alpha=0.4, s=10, marker='s')
+    plt.scatter(x_pred, Predicts[0], label="Q-0(green)", c='g', alpha=0.15, s=10, marker='s')
     plt.legend(loc='best')
     plt.grid()
 
     ax = plt.subplot(312)
-    plt.scatter(x_pred, Predicts[1], label="Q-1(red)", c='r', alpha=0.3, s=10, marker='s')
+    plt.scatter(x_pred, Predicts[1], label="Q-1(red)", c='r', alpha=0.1, s=10, marker='s')
     plt.legend(loc='best')
     plt.grid()
 
     ax = plt.subplot(313)
-    plt.scatter(x_pred, Predicts[2], label="Q-2(blue)", c='b', alpha=0.2, s=10, marker='s')
+    plt.scatter(x_pred, Predicts[2], label="Q-2(blue)", c='b', alpha=0.1, s=10, marker='s')
     plt.legend(loc='best')
     plt.grid()
     plt.xlabel("Sample")
@@ -419,7 +420,6 @@ else:
     plt.xlabel("Epoch")
     plt.legend(loc='best')
     plt.grid()
-
 
 plt.savefig(f"{MODEL_NAME}/{agent.name}-Qs.png")
 plt.show()
