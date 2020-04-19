@@ -267,10 +267,7 @@ for epoch in range(EPOCHS):
     else:
         render = False
         if epoch < EPOCHS // 4:
-            if epoch < EPOCHS / 6:
-                eps = 1.0
-            else:
-                eps = 0.5
+            eps = 0.5
         else:
             try:
                 eps = next(eps_iter)
@@ -342,10 +339,8 @@ for epoch in range(EPOCHS):
 
             if index == 0 and render:
                 arrow = "<" if Actions[0] == 0 else "!" if Actions[0] == 1 else ">"
-                # print(new_state[1])
-                print(arrow, end='')
+                # print(arrow, end='')
                 env.render()
-                # time.sleep(0.021)
 
         for ind_d in range(len(Envs)-1, -1, -1):
             if Done[ind_d]:
@@ -362,12 +357,6 @@ for epoch in range(EPOCHS):
                 Cost.pop(ind_d)
                 Envs.pop(ind_d)
                 New_states.pop(ind_d)
-
-        # if len(New_states) == 1:
-        #     print("its one")
-        #
-        # elif len(New_states) == 2:
-        #     pass
 
         if len(Envs) <= 0:
             break
