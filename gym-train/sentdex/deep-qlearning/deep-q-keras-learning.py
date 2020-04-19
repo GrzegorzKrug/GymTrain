@@ -3,6 +3,7 @@ from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatten
 from keras.callbacks import TensorBoard
 from keras.optimizers import Adam
 from collections import deque
+# from
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -25,10 +26,10 @@ REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
 
 # LR = 0.05
-MINIBATCH_SIZE = 120 * SIM_COUNT
+MINIBATCH_SIZE = 300 * SIM_COUNT
 
 DISCOUNT = 0.95
-AGENT_LR = 0.00001
+AGENT_LR = 0.01
 # AGENT_LR = 0.0001
 
 MODEL_NAME = "Relu16-Drop0_2-Relu16-LinOut-1e-4-B_120-Speed_reward"
@@ -194,6 +195,7 @@ class DQNAgent:
 
         # print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
         #       f"Q-diff Min: {diff_min:>5.5f}, Avg: {diff_avg:>5.5f}, Max: {diff_max:>5.5f}")
+        
         if terminal_state:
             self.target_update_counter += 1
 
@@ -316,12 +318,12 @@ for epoch in range(EPOCHS):
             # new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
 
             if MORE_REWARDS and not done:
-                if abs(new_state[1]) > 0.01:
+                if abs(new_state[1]) > 0.006:
                     # if render:
                     #     print("small speed")
                     reward += 0.2
 
-                if abs(new_state[1]) > 0.1:
+                if abs(new_state[1]) > 0.015:
                     # if render:
                     #     print("Speed")
                     reward += 0.8
