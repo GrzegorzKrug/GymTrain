@@ -32,7 +32,7 @@ def show_model(input_weights: '2d list of layers weights', model_name=None):
                 Node_map.append([])
                 for node_index, node in enumerate(layer):
                     x = index * 20
-                    y_ratio = 2
+                    y_ratio = 3
                     y = node_index*y_ratio - node_count*y_ratio/2 + y_ratio/2
                     Node_map[-1].append([x, y])
         else:

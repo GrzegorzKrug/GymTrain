@@ -3,7 +3,7 @@ from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatten
 from keras.callbacks import TensorBoard
 from keras.optimizers import Adam
 from collections import deque
-# from
+from show_model_weights import show_model
 
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -20,21 +20,21 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-EPOCHS = 200
-SIM_COUNT = 15
-# REPLAY_MEMORY_SIZE = 15 * SIM_COUNT * 200
-REPLAY_MEMORY_SIZE = 30 * SIM_COUNT * 200
-MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
+EPOCHS = 500
+SIM_COUNT = 20
+MINIBATCH_SIZE = SIM_COUNT * 100  # * SIM_COUNT
 
-# LR = 0.05
-MINIBATCH_SIZE = 300  # * SIM_COUNT
+REPLAY_MEMORY_SIZE = 30 * SIM_COUNT * 200
+MIN_REPLAY_MEMORY_SIZE = MINIBATCH_SIZE
 
 DISCOUNT = 0.95
 AGENT_LR = 0.001
 
-MODEL_NAME = "Relu32-Drop0_2-Relu32-LinOut-1e-3-B_200"
+MODEL_NAME = f"Relu16-Drop0_2-Relu16-LinOut-1e-3-B_{MINIBATCH_SIZE}"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
+ALLOW_TRAIN = True
+SAVE_PICS = ALLOW_TRAIN
 
 STATE_OFFSET = 0
 INITIAL_EPS = 0.5
@@ -43,10 +43,8 @@ END_EPS = 0.0
 EPS_END_AT = EPOCHS // 3
 
 SHOW_EVERY = EPOCHS // 5
-if SHOW_EVERY < 25:
-    SHOW_EVERY = 25
 TRAIN_EVERY = 1
-CLONE_EVERY_TRAIN = 10
+CLONE_EVERY_TRAIN = 1
 
 SHOW_LAST = False
 PLOT_ALL_QS = True
@@ -118,9 +116,9 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 # Flatten(),
-                Dense(32, activation='relu', input_shape=self.observation_space_vals),
+                Dense(16, activation='relu', input_shape=self.observation_space_vals),
                 Dropout(0.2),
-                Dense(32, activation='relu', ),
+                Dense(16, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=AGENT_LR),
@@ -170,9 +168,8 @@ class DQNAgent:
                 new_q = reward
 
             old_qs = current_qs_list[index]
-            # new_q = old_qs[action] * (1 - LR) + LR * new_q
-            diffs.append(old_qs[action]-new_q)
 
+            diffs.append(old_qs[action]-new_q)
             old_qs[action] = new_q
 
             X.append(old_state)
@@ -180,7 +177,7 @@ class DQNAgent:
 
         X = np.array(X)
         y = np.array(y)
-        history = self.train_model.fit(
+        self.train_model.fit(
                 X, y,
                 verbose=0, shuffle=False, epochs=1
                 # batch_size=64
@@ -191,18 +188,14 @@ class DQNAgent:
         diff_max = np.max(diffs)
         diff_avg = np.mean(diffs)
 
-        # print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
-        #       f"Q-diff Min: {diff_min:>5.5f}, Avg: {diff_avg:>5.5f}, Max: {diff_max:>5.5f}")
-
         if terminal_state:
             self.target_update_counter += 1
 
-        if self.target_update_counter > CLONE_EVERY_TRAIN:
+        if self.target_update_counter >= CLONE_EVERY_TRAIN:
             self.model.set_weights(self.train_model.get_weights())
             self.target_update_counter = 0
             self.save_model()
-            # show_model(self.model.get_weights(), model_name=MODEL_NAME)
-            # print("Update weights, save model, save picture done.")
+            show_model(self.model.get_weights(), model_name=MODEL_NAME)
 
         return diff_min, diff_max, diff_avg
 
@@ -251,7 +244,7 @@ for epoch in range(EPOCHS):
     New_states = np.array(New_states)
 
     # Train
-    if not epoch % TRAIN_EVERY:
+    if not epoch % TRAIN_EVERY and ALLOW_TRAIN:
         pack = agent.train(True)
         if pack:
             dmin, dmax, davg = pack
@@ -282,17 +275,9 @@ for epoch in range(EPOCHS):
             input("Last agent...")
 
     step = 0
+    goal_reached = 0
     while True:
         step += 1
-        # Preparated Actions
-        # if not x % interval:
-        #     flag ^= True
-        #     interval += interval + 7 + interval // 7
-        #     print("Flip", f"next interval: {interval}")
-        # action = 0 if flag else 2
-
-        # if step == 100:
-        #     print("step 100")
         Done = [False] * len(Envs)
         Old_states = np.array(New_states)
 
@@ -317,13 +302,9 @@ for epoch in range(EPOCHS):
             # new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
             if MORE_REWARDS and not done:
                 if abs(new_state[1]) > 0.006:
-                    # if render:
-                    #     print("small speed")
                     reward += 0.2
 
                 if abs(new_state[1]) > 0.01:
-                    # if render:
-                    #     print("Speed")
                     reward += 0.5
 
                 if COMPENSATE_REWARDS:
@@ -339,18 +320,16 @@ for epoch in range(EPOCHS):
 
             if index == 0 and render:
                 arrow = "<" if Actions[0] == 0 else "!" if Actions[0] == 1 else ">"
-                # print(arrow, end='')
                 env.render()
 
         for ind_d in range(len(Envs)-1, -1, -1):
             if Done[ind_d]:
                 if ind_d == 0 and render:
                     Envs[0].close()
-                    print()
                     render = False
                 full_cost += Cost[ind_d]
                 if step < 200:
-                    print("GOAL REACHED!")
+                    goal_reached += 1
                 x_graph.append(epoch)
                 y_graph.append(Cost[ind_d])
 
@@ -361,6 +340,8 @@ for epoch in range(EPOCHS):
         if len(Envs) <= 0:
             break
 
+    if goal_reached:
+        print(f"Goal reached: {goal_reached}")
     average.append(full_cost/SIM_COUNT)
     eps_graph.append(eps)
 
@@ -390,7 +371,8 @@ plt.grid()
 
 plt.suptitle(f"{agent.name}\n Learning rate:{AGENT_LR}, Batch: {MINIBATCH_SIZE}")
 plt.subplots_adjust(hspace=0.4)
-plt.savefig(f"{MODEL_NAME}/{agent.name}.png")
+if SAVE_PICS:
+    plt.savefig(f"{MODEL_NAME}/{agent.name}.png")
 
 
 plt.figure(figsize=(16, 9))
@@ -403,12 +385,13 @@ if PLOT_ALL_QS:
         for rgb_sample in zip(Predicts[0], Predicts[1], Predicts[2]):
             index = np.argmax(rgb_sample)
             color = 'g' if index == 0 else 'r' if index == 1 else 'b'
-            samples.append(rgb_sample[index])
+            samples.append(rgb_sample[int(index)])
             colors.append(color)
         plt.scatter(range(len(samples)), samples, c=colors, alpha=0.1, s=10, marker='.')
-        # plt.legend(loc='best')
-        plt.title("Movement evolution:\n"
-                  "<- Green, Red None, Blue ->")
+        plt.title("Movement evolution in time:\n"
+                  "Left Green, Red None, Blue Right")
+        plt.xlabel("Sample")
+        plt.ylabel("Q-value")
         plt.grid()
 
     else:
@@ -436,7 +419,8 @@ else:
     plt.legend(loc='best')
     plt.grid()
 
-plt.savefig(f"{MODEL_NAME}/Qs-{agent.name}.png")
+if SAVE_PICS:
+    plt.savefig(f"{MODEL_NAME}/Qs-{agent.name}.png")
 plt.show()
 print(f"End: {agent.name}.")
 
