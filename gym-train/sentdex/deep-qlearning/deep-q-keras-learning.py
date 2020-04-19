@@ -20,38 +20,39 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-EPOCHS = 300
-SIM_COUNT = 1
-REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
+EPOCHS = 200
+SIM_COUNT = 15
+# REPLAY_MEMORY_SIZE = 15 * SIM_COUNT * 200
+REPLAY_MEMORY_SIZE = 30 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
 
 # LR = 0.05
-MINIBATCH_SIZE = 300 * SIM_COUNT
+MINIBATCH_SIZE = 300  # * SIM_COUNT
 
 DISCOUNT = 0.95
-AGENT_LR = 0.01
-# AGENT_LR = 0.0001
+AGENT_LR = 0.001
 
-MODEL_NAME = "Relu16-Drop0_2-Relu16-LinOut-1e-4-B_120-Speed_reward"
+MODEL_NAME = "Relu32-Drop0_2-Relu32-LinOut-1e-3-B_200"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
 STATE_OFFSET = 0
-INITIAL_EPS = 0.7
-INITIAL_SMALL_EPS = 0.15
-END_EPS = 0
+INITIAL_EPS = 0.5
+INITIAL_SMALL_EPS = 0.1
+END_EPS = 0.0
+EPS_END_AT = EPOCHS // 3
 
-EPS_END_AT = EPOCHS // 5
-
-SHOW_EVERY = EPOCHS * 5
+SHOW_EVERY = EPOCHS // 5
 if SHOW_EVERY < 25:
     SHOW_EVERY = 25
 TRAIN_EVERY = 1
-CLONE_EVERY_TRAIN = 3
+CLONE_EVERY_TRAIN = 10
 
 SHOW_LAST = False
 PLOT_ALL_QS = True
+COMBINE_QS = True
 MORE_REWARDS = True
+COMPENSATE_REWARDS = False
 
 # def state_normalize(state, min_list, max_list):
 #     # return state
@@ -117,9 +118,9 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 # Flatten(),
-                Dense(16, activation='relu', input_shape=self.observation_space_vals),
+                Dense(32, activation='relu', input_shape=self.observation_space_vals),
                 Dropout(0.2),
-                Dense(16, activation='relu', ),
+                Dense(32, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=AGENT_LR),
@@ -128,11 +129,11 @@ class DQNAgent:
 
         return model
 
-    def update_replay_memory(self, transition):
-        self.replay_memory.append(transition)
-
-    def save_model(self):
-        self.model.save_weights(f"{MODEL_NAME}/model", overwrite=True)
+    def get_sq(self, state):
+        sq = self.model.predict(
+                np.array(state).reshape(-1, *state.shape)[0]
+        )
+        return sq
 
     def load_model(self):
         if LOAD and os.path.isfile(f"{MODEL_NAME}/model"):
@@ -142,11 +143,8 @@ class DQNAgent:
         else:
             print(f"New model: {MODEL_NAME}")
 
-    def get_sq(self, state):
-        sq = self.model.predict(
-                np.array(state).reshape(-1, *state.shape)[0]
-        )
-        return sq
+    def save_model(self):
+        self.model.save_weights(f"{MODEL_NAME}/model", overwrite=True)
 
     def train(self, terminal_state):
         if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
@@ -195,7 +193,7 @@ class DQNAgent:
 
         # print(f"Train - Loss: {history.history['loss'][-1]:>2.4f}, Accuracy: {history.history['accuracy'][-1]:>2.4f}, "
         #       f"Q-diff Min: {diff_min:>5.5f}, Avg: {diff_avg:>5.5f}, Max: {diff_max:>5.5f}")
-        
+
         if terminal_state:
             self.target_update_counter += 1
 
@@ -207,6 +205,9 @@ class DQNAgent:
             # print("Update weights, save model, save picture done.")
 
         return diff_min, diff_max, diff_avg
+
+    def update_replay_memory(self, transition):
+        self.replay_memory.append(transition)
 
 
 ENVS = []
@@ -241,6 +242,7 @@ for epoch in range(EPOCHS):
     full_cost = 0
     Envs = ENVS.copy()
 
+    # Reset environments
     New_states = []
     for env in Envs:
         state = env.reset()
@@ -248,16 +250,16 @@ for epoch in range(EPOCHS):
         New_states.append(state)
     New_states = np.array(New_states)
 
+    # Train
     if not epoch % TRAIN_EVERY:
         pack = agent.train(True)
-
         if pack:
             dmin, dmax, davg = pack
             diff_x.append(epoch)
             diff_min.append(dmin)
             diff_max.append(dmax)
             diff_avg.append(davg)
-
+    # Select epsilon
     if not epoch % SHOW_EVERY:
         render = True
         if epoch == 0:
@@ -275,7 +277,7 @@ for epoch in range(EPOCHS):
             except StopIteration:
                 eps_iter = iter(np.linspace(INITIAL_SMALL_EPS, END_EPS, EPS_END_AT))
                 eps = next(eps_iter)
-
+    # Show last agent
     if epoch == EPOCHS - 1:
         render = True
         eps = 0
@@ -316,20 +318,20 @@ for epoch in range(EPOCHS):
         for index, env in enumerate(Envs):
             new_state, reward, done, _ = env.step(Actions[index])
             # new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
-
             if MORE_REWARDS and not done:
                 if abs(new_state[1]) > 0.006:
                     # if render:
                     #     print("small speed")
                     reward += 0.2
 
-                if abs(new_state[1]) > 0.015:
+                if abs(new_state[1]) > 0.01:
                     # if render:
                     #     print("Speed")
-                    reward += 0.8
+                    reward += 0.5
 
-                reward -= 0.2
-                reward -= 0.8
+                if COMPENSATE_REWARDS:
+                    reward -= 0.2
+                    reward -= 0.8
 
             new_transition = (Old_states[index], Actions[index], new_state, reward, done)
             agent.update_replay_memory(new_transition)
@@ -378,26 +380,26 @@ for epoch in range(EPOCHS):
 agent.save_model()
 
 plt.figure(figsize=(16, 9))
-plt.subplot(211)
+plt.subplot(311)
 plt.scatter(x_graph, y_graph, marker='s', alpha=0.3, color='m', label="Cost")
 plt.plot(average, label="Average", color="r")
 plt.legend(loc='best')
 plt.grid()
 
-plt.subplot(212)
+plt.subplot(312)
 plt.plot(eps_graph, label="Epsilon")
 plt.legend(loc='best')
 plt.xlabel("Epoch")
 plt.grid()
 
-# plt.subplot(413)
-# plt.plot(diff_x, diff_min, label="q-diff Min")
-# plt.plot(diff_x, diff_max, label="q-diff Max")
-# plt.plot(diff_x, diff_avg, label="q-diff Avg")
-# plt.legend(loc='best')
-# plt.grid()
+plt.subplot(313)
+plt.plot(diff_x, diff_min, label="q-diff Min")
+plt.plot(diff_x, diff_max, label="q-diff Max")
+plt.plot(diff_x, diff_avg, label="q-diff Avg")
+plt.legend(loc='best')
+plt.grid()
 
-plt.suptitle(f"{agent.name}")
+plt.suptitle(f"{agent.name}\n Learning rate:{AGENT_LR}, Batch: {MINIBATCH_SIZE}")
 plt.subplots_adjust(hspace=0.4)
 plt.savefig(f"{MODEL_NAME}/{agent.name}.png")
 
@@ -405,26 +407,42 @@ plt.savefig(f"{MODEL_NAME}/{agent.name}.png")
 plt.figure(figsize=(16, 9))
 
 if PLOT_ALL_QS:
-    x_pred = range(len(Predicts[0]))
-    ax = plt.subplot(311)
-    plt.scatter(x_pred, Predicts[0], label="Q-0(green)", c='g', alpha=0.15, s=10, marker='.')
-    plt.legend(loc='best')
-    plt.grid()
+    if COMBINE_QS:
+        samples = []
+        colors = []
 
-    ax = plt.subplot(312)
-    plt.scatter(x_pred, Predicts[1], label="Q-1(red)", c='r', alpha=0.1, s=10, marker='.')
-    plt.legend(loc='best')
-    plt.grid()
+        for rgb_sample in zip(Predicts[0], Predicts[1], Predicts[2]):
+            index = np.argmax(rgb_sample)
+            color = 'g' if index == 0 else 'r' if index == 1 else 'b'
+            samples.append(rgb_sample[index])
+            colors.append(color)
+        plt.scatter(range(len(samples)), samples, c=colors, alpha=0.1, s=10, marker='.')
+        # plt.legend(loc='best')
+        plt.title("Movement evolution:\n"
+                  "<- Green, Red None, Blue ->")
+        plt.grid()
 
-    ax = plt.subplot(313)
-    plt.scatter(x_pred, Predicts[2], label="Q-2(blue)", c='b', alpha=0.1, s=10, marker='.')
-    plt.legend(loc='best')
-    plt.grid()
-    plt.xlabel("Sample")
+    else:
+        x_pred = range(len(Predicts[0]))
+        ax = plt.subplot(311)
+        plt.scatter(x_pred, Predicts[0], label="Q-0(green)", c='g', alpha=0.05, s=10, marker='.')
+        plt.legend(loc='best')
+        plt.grid()
+
+        ax = plt.subplot(312)
+        plt.scatter(x_pred, Predicts[1], label="Q-1(red)", c='r', alpha=0.05, s=10, marker='.')
+        plt.legend(loc='best')
+        plt.grid()
+
+        ax = plt.subplot(313)
+        plt.scatter(x_pred, Predicts[2], label="Q-2(blue)", c='b', alpha=0.05, s=10, marker='.')
+        plt.legend(loc='best')
+        plt.grid()
+        plt.xlabel("Sample")
 else:
-    plt.scatter(Predicts[3], Predicts[0], label="Q-0(green)", c='g', alpha=0.4, s=10, marker='.')
-    plt.scatter(Predicts[3], Predicts[1], label="Q-1(red)", c='r', alpha=0.3, s=10, marker='.')
-    plt.scatter(Predicts[3], Predicts[2], label="Q-2(blue)", c='b', alpha=0.2, s=10, marker='.')
+    plt.scatter(Predicts[3], Predicts[0], label="Q-0(green)", c='g', alpha=0.4, s=5, marker='.')
+    plt.scatter(Predicts[3], Predicts[1], label="Q-1(red)", c='r', alpha=0.3, s=5, marker='.')
+    plt.scatter(Predicts[3], Predicts[2], label="Q-2(blue)", c='b', alpha=0.2, s=5, marker='.')
     plt.xlabel("Epoch")
     plt.legend(loc='best')
     plt.grid()
