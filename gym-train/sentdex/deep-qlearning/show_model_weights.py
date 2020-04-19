@@ -8,7 +8,7 @@ import numpy as np
 import os
 
 
-MODEL_NAME = "Lin16-Drop0_2-Relu32-LinOut-1e3"
+MODEL_NAME = "Relu16-Drop0_2-Relu16-LinOut-1e-4-B_120-Speed_reward"
 
 FIG_SIZE = (16, 9)
 INPUT = 2
@@ -89,9 +89,9 @@ def show_model(input_weights: '2d list of layers weights', model_name=None):
 def create_model():
     model = Sequential([
             # Flatten(),
-            Dense(16, activation='linear', input_shape=(2,)),
+            Dense(16, activation='relu', input_shape=(2,)),
             # Dropout(0.3),
-            Dense(32, activation='relu'),
+            Dense(16, activation='relu'),
             Dense(3, activation='linear')
     ])
     model.compile(optimizer=Adam(lr=0.001),

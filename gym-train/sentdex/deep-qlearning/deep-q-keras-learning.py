@@ -9,6 +9,7 @@ import tensorflow as tf
 import numpy as np
 import datetime
 import random
+import time
 import gym
 import os
 
@@ -18,30 +19,30 @@ config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 sess = tf.compat.v1.Session(config=config)
 
-SIM_COUNT = 15
+EPOCHS = 300
+SIM_COUNT = 1
 REPLAY_MEMORY_SIZE = 5 * SIM_COUNT * 200
 MIN_REPLAY_MEMORY_SIZE = 2 * SIM_COUNT * 200
-DISCOUNT = 0.95
 
 # LR = 0.05
-MINIBATCH_SIZE = 300 * SIM_COUNT
-AGENT_LR = 0.0001
-# AGENT_LR = 0.0001
-MORE_REWARDS = True
+MINIBATCH_SIZE = 120 * SIM_COUNT
 
-MODEL_NAME = "Relu32-Drop0_25-Relu32-SoloKeras-LinOut-1e4-B_300-Speed_reward"
+DISCOUNT = 0.95
+AGENT_LR = 0.00001
+# AGENT_LR = 0.0001
+
+MODEL_NAME = "Relu16-Drop0_2-Relu16-LinOut-1e-4-B_120-Speed_reward"
 os.makedirs(MODEL_NAME, exist_ok=True)
 LOAD = True
 
 STATE_OFFSET = 0
-EPOCHS = 200
 INITIAL_EPS = 0.7
-INITIAL_SMALL_EPS = 0.1
-END_EPS = -0.05
+INITIAL_SMALL_EPS = 0.15
+END_EPS = 0
 
 EPS_END_AT = EPOCHS // 5
 
-SHOW_EVERY = EPOCHS // 20
+SHOW_EVERY = EPOCHS * 5
 if SHOW_EVERY < 25:
     SHOW_EVERY = 25
 TRAIN_EVERY = 1
@@ -49,6 +50,7 @@ CLONE_EVERY_TRAIN = 3
 
 SHOW_LAST = False
 PLOT_ALL_QS = True
+MORE_REWARDS = True
 
 # def state_normalize(state, min_list, max_list):
 #     # return state
@@ -114,9 +116,9 @@ class DQNAgent:
     def create_model(self):
         model = Sequential([
                 # Flatten(),
-                Dense(32, activation='relu', input_shape=self.observation_space_vals),
-                Dropout(0.25),
-                Dense(32, activation='relu', ),
+                Dense(16, activation='relu', input_shape=self.observation_space_vals),
+                Dropout(0.2),
+                Dense(16, activation='relu', ),
                 Dense(self.action_space_size, activation='linear')
         ])
         model.compile(optimizer=Adam(lr=AGENT_LR),
@@ -132,7 +134,7 @@ class DQNAgent:
         self.model.save_weights(f"{MODEL_NAME}/model", overwrite=True)
 
     def load_model(self):
-        if LOAD and os.path.isfile(f"{MODEL_NAME}/model.index"):
+        if LOAD and os.path.isfile(f"{MODEL_NAME}/model"):
             print(f"Loading model: {MODEL_NAME}")
             self.model.load_weights(f"{MODEL_NAME}/model")
             self.train_model.load_weights(f"{MODEL_NAME}/model")
@@ -261,10 +263,10 @@ for epoch in range(EPOCHS):
     else:
         render = False
         if epoch < EPOCHS // 4:
-            # if epoch < EPOCHS / 2:
-            eps = 1.0
-            # else:
-            #     eps = 0.8
+            if epoch < EPOCHS / 6:
+                eps = 1.0
+            else:
+                eps = 0.5
         else:
             try:
                 eps = next(eps_iter)
@@ -314,13 +316,17 @@ for epoch in range(EPOCHS):
             # new_state = state_normalize(new_state, OBS_LOW, OBS_HIGH)
 
             if MORE_REWARDS and not done:
-                if abs(new_state[1]) > 0.001:
-                    reward += 0.5
+                if abs(new_state[1]) > 0.01:
+                    # if render:
+                    #     print("small speed")
+                    reward += 0.2
 
-                if abs(new_state[1]) > 0.003:
+                if abs(new_state[1]) > 0.1:
+                    # if render:
+                    #     print("Speed")
                     reward += 0.8
 
-                reward -= 0.5
+                reward -= 0.2
                 reward -= 0.8
 
             new_transition = (Old_states[index], Actions[index], new_state, reward, done)
@@ -335,7 +341,7 @@ for epoch in range(EPOCHS):
                 # print(new_state[1])
                 print(arrow, end='')
                 env.render()
-                # time.sleep(0.001)
+                # time.sleep(0.021)
 
         for ind_d in range(len(Envs)-1, -1, -1):
             if Done[ind_d]:
@@ -344,7 +350,7 @@ for epoch in range(EPOCHS):
                     print()
                     render = False
                 full_cost += Cost[ind_d]
-                if Cost[ind_d] > -200:
+                if step < 200:
                     print("GOAL REACHED!")
                 x_graph.append(epoch)
                 y_graph.append(Cost[ind_d])
@@ -399,29 +405,29 @@ plt.figure(figsize=(16, 9))
 if PLOT_ALL_QS:
     x_pred = range(len(Predicts[0]))
     ax = plt.subplot(311)
-    plt.scatter(x_pred, Predicts[0], label="Q-0(green)", c='g', alpha=0.15, s=10, marker='s')
+    plt.scatter(x_pred, Predicts[0], label="Q-0(green)", c='g', alpha=0.15, s=10, marker='.')
     plt.legend(loc='best')
     plt.grid()
 
     ax = plt.subplot(312)
-    plt.scatter(x_pred, Predicts[1], label="Q-1(red)", c='r', alpha=0.1, s=10, marker='s')
+    plt.scatter(x_pred, Predicts[1], label="Q-1(red)", c='r', alpha=0.1, s=10, marker='.')
     plt.legend(loc='best')
     plt.grid()
 
     ax = plt.subplot(313)
-    plt.scatter(x_pred, Predicts[2], label="Q-2(blue)", c='b', alpha=0.1, s=10, marker='s')
+    plt.scatter(x_pred, Predicts[2], label="Q-2(blue)", c='b', alpha=0.1, s=10, marker='.')
     plt.legend(loc='best')
     plt.grid()
     plt.xlabel("Sample")
 else:
-    plt.scatter(Predicts[3], Predicts[0], label="Q-0(green)", c='g', alpha=0.4, s=10, marker='s')
-    plt.scatter(Predicts[3], Predicts[1], label="Q-1(red)", c='r', alpha=0.3, s=10, marker='s')
-    plt.scatter(Predicts[3], Predicts[2], label="Q-2(blue)", c='b', alpha=0.2, s=10, marker='s')
+    plt.scatter(Predicts[3], Predicts[0], label="Q-0(green)", c='g', alpha=0.4, s=10, marker='.')
+    plt.scatter(Predicts[3], Predicts[1], label="Q-1(red)", c='r', alpha=0.3, s=10, marker='.')
+    plt.scatter(Predicts[3], Predicts[2], label="Q-2(blue)", c='b', alpha=0.2, s=10, marker='.')
     plt.xlabel("Epoch")
     plt.legend(loc='best')
     plt.grid()
 
-plt.savefig(f"{MODEL_NAME}/{agent.name}-Qs.png")
+plt.savefig(f"{MODEL_NAME}/Qs-{agent.name}.png")
 plt.show()
 print(f"End: {agent.name}.")
 
