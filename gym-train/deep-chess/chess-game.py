@@ -14,18 +14,58 @@ MOVES = {
 
 class ChessGame:
     def __init__(self):
+        self.empty_field = 0
         self.board = np.zeros((8, 8), dtype=Figure)
-        # self.board[:] = ''
-        for row in [0, 1, 6, 7]:
-            for column in range(8):
-                self.board[row, column] = Figure(row*8 + column)
+        self.move_history = []
+        self.next_move_available = True
         self.reset()
 
     def reset(self):
-        pass
+        self.board = np.zeros((8, 8), dtype=Figure)
+        self.board[:] = self.empty_field
+        self.move_history = []
+        self.next_move_available = True
+        for row in [0, 1, 6, 7]:
+            for column in range(8):
+                self.board[row, column] = Figure(row * 8 + column)
+
+        return self.getstate()
 
     def getstate(self):
-        pass
+        """
+        Whites are at index <0, 15>
+        Black are at index <48, 63>
+        to get correctly rotated board, use pretty_state
+        :return:
+        numpy array, shape=(8,8), dtype=Figure
+        """
+        return self.board.copy()
+
+    def pretty_state(self):
+        """
+        Whites are at index <0, 15>
+        Black are at index <48, 63>
+        Returns array rotated for good look in console
+        :return:
+        numpy array, shape=(8,8), dtype=Figure
+        """
+        out = self.board.copy()
+        out = np.flip(out)
+        out = np.fliplr(out)
+        return out
+
+    def make_move(self, pos_from, pos_to):
+        valid = self.check_move_rules(pos_from, pos_to)
+        if valid:
+            row = pos_from // 8
+            col = pos_from % 8
+            new_row = pos_to // 8
+            new_col = pos_to % 8
+            self.board[new_row, new_col] = self.board[row, col]
+            self.board[row, col] = self.empty_field
+
+    def check_move_rules(self, pos_from, pos_to):
+        return True
 
 
 class Figure:
@@ -48,9 +88,9 @@ class Figure:
             self.fig_type = fig_type
 
     def _set_to_default_figure(self):
-        if self.position < 16:
+        if self.position <= 16:
             self.color = 'white'
-        elif self.position > 47:
+        elif self.position >= 47:
             self.color = 'black'
         else:
             raise ValueError(f"Can not define default color for position {self.position}")
@@ -94,7 +134,7 @@ class Figure:
 
         elif self.fig_type == 'bishop':
             if self.color == 'white':
-                _fig_letter ='♗'
+                _fig_letter = '♗'
             else:
                 _fig_letter = '♝'
 
@@ -115,4 +155,6 @@ class Figure:
 
 if __name__ == "__main__":
     game = ChessGame()
-    print(game.board)
+    print(game.pretty_state())
+    game.make_move(0, 16)
+    print(game.pretty_state())
