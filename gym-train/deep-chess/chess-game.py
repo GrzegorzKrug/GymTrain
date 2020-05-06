@@ -69,11 +69,11 @@ class ChessGame:
 
 
 class Figure:
-    def __init__(self, position, color=None, fig_type=None):
-        if type(position) != int:
+    def __init__(self, initial_position, color=None, fig_type=None):
+        if type(initial_position) != int:
             raise ValueError("Position is not int")
 
-        self.position = position
+        self.initial_position = initial_position
 
         if color is None and fig_type is None:
             self._set_to_default_figure()
@@ -88,25 +88,25 @@ class Figure:
             self.fig_type = fig_type
 
     def _set_to_default_figure(self):
-        if self.position <= 16:
+        if self.initial_position <= 16:
             self.color = 'white'
-        elif self.position >= 47:
+        elif self.initial_position >= 47:
             self.color = 'black'
         else:
-            raise ValueError(f"Can not define default color for position {self.position}")
+            raise ValueError(f"Can not define default color for initial_position {self.initial_position}")
 
-        if 8 <= self.position <= 15 or 48 <= self.position <= 55:
+        if 8 <= self.initial_position <= 15 or 48 <= self.initial_position <= 55:
             self.fig_type = 'pawn'
 
-        elif self.position in [0, 7, 56, 63]:
+        elif self.initial_position in [0, 7, 56, 63]:
             self.fig_type = 'rook'
-        elif self.position in [1, 6, 57, 62]:
+        elif self.initial_position in [1, 6, 57, 62]:
             self.fig_type = 'knight'
-        elif self.position in [2, 5, 58, 61]:
+        elif self.initial_position in [2, 5, 58, 61]:
             self.fig_type = 'bishop'
-        elif self.position in [3, 59]:
+        elif self.initial_position in [3, 59]:
             self.fig_type = 'queen'
-        elif self.position in [4, 60]:
+        elif self.initial_position in [4, 60]:
             self.fig_type = 'king'
         else:
             raise ValueError("Position uknown, can not set default figure")
