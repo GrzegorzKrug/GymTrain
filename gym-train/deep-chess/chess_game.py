@@ -13,23 +13,37 @@ MOVES = {
 
 
 class ChessGame:
-    def __init__(self):
+    def __init__(self, empty_board=False):
         self.empty_field = 0
         self.board = np.zeros((8, 8), dtype=Figure)
         self.move_history = []
         self.next_move_available = True
+        self.empty_board = empty_board
         self.reset()
 
     def reset(self):
+        """
+        Setups all variables defined in __init__
+        Returns:
+        Returns state array.
+        """
         self.board = np.zeros((8, 8), dtype=Figure)
         self.board[:] = self.empty_field
         self.move_history = []
-        self.next_move_available = True
-        for row in [0, 1, 6, 7]:
-            for column in range(8):
-                self.board[row, column] = Figure(row * 8 + column)
 
+        if self.empty_board:
+            self.next_move_available = False
+        else:
+            self.next_move_available = True
+            for row in [0, 1, 6, 7]:
+                for column in range(8):
+                    self.board[row, column] = Figure(row * 8 + column)
         return self.getstate()
+
+    def add_figure(self, pos, fig_type, color):
+        row = pos // 8
+        col = pos % 8
+        self.board[row, col] = Figure(initial_position=pos, color=color, fig_type=fig_type)
 
     def getstate(self):
         """
@@ -43,15 +57,14 @@ class ChessGame:
 
     def pretty_state(self):
         """
-        Whites are at index <0, 15>
-        Black are at index <48, 63>
-        Returns array rotated for good look in console
+        Returns pretty array for console print.
+            Whites are at index <0, 15>
+            Black are at index <48, 63>
         :return:
         numpy array, shape=(8,8), dtype=Figure
         """
         out = self.board.copy()
-        out = np.flip(out)
-        out = np.fliplr(out)
+        out = np.flipud(out)
         return out
 
     def make_move(self, pos_from, pos_to):
@@ -64,8 +77,52 @@ class ChessGame:
             self.board[new_row, new_col] = self.board[row, col]
             self.board[row, col] = self.empty_field
 
-    def check_move_rules(self, pos_from, pos_to):
-        return True
+    def check_move_rules(self, pos, target_pos):
+        """
+        Checks board layout for specific figure.
+        Args:
+            pos:
+            target_pos:
+
+        Returns:
+        Boolean: True if valid move
+        """
+        row = pos // 8
+        col = pos % 8
+        target_row = target_pos // 8
+        target_col = target_pos % 8
+
+        if self.board[target_row, target_col] and \
+                self.board[row, col].color == self.board[target_row, target_col].color:
+            return False
+
+        figure = self.board[row, col]
+        fig_type = figure.fig_type
+
+        if fig_type == 'pawn':
+            if figure.color == 'white':
+                if target_pos - pos in [7, 8, 9]:
+                    return True
+
+                elif target_pos - pos == 16:
+                    if self.board[row + 1, col] == 0 and self.figure:
+                        return True
+                    else:
+                        return False
+            elif figure.color == 'black':
+                pass
+        elif fig_type == 'rook':
+            pass
+        elif fig_type == 'knight':
+            pass
+        elif fig_type == 'bishop':
+            pass
+        elif fig_type == 'queen':
+            pass
+        elif fig_type == 'king':
+            pass
+        else:
+            raise ValueError(f"Figure type unknown: {fig_type}")
 
 
 class Figure:
@@ -74,6 +131,7 @@ class Figure:
             raise ValueError("Position is not int")
 
         self.initial_position = initial_position
+        self.moved = False
 
         if color is None and fig_type is None:
             self._set_to_default_figure()
@@ -84,7 +142,7 @@ class Figure:
 
             if fig_type != "king" and fig_type != "queen" and fig_type != "rook" and \
                     fig_type != "bishop" and fig_type != "knight" and fig_type != "pawn":
-                raise ValueError("Figure type invalid")
+                raise ValueError(f"Figure type invalid: '{fig_type}'")
             self.fig_type = fig_type
 
     def _set_to_default_figure(self):
