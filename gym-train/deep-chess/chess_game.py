@@ -15,7 +15,8 @@ MOVES = {
 class ChessGame:
     def __init__(self, empty_board=False):
         self.empty_field = 0
-        self.board = np.zeros((8, 8), dtype=Figure)
+        self.board = np.arange(64, dtype=Figure)
+        self.board = self.board.reshape((8, 8))
         self.move_history = []
         self.next_move_available = True
         self.empty_board = empty_board
@@ -27,8 +28,9 @@ class ChessGame:
         Returns:
         Returns state array.
         """
-        self.board = np.zeros((8, 8), dtype=Figure)
-        self.board[:] = self.empty_field
+        self.board = np.arange(64, dtype=Figure)
+        self.board = self.board.reshape((8, 8))
+        # self.board[:] = self.empty_field
         self.move_history = []
 
         if self.empty_board:
@@ -65,7 +67,31 @@ class ChessGame:
         """
         out = self.board.copy()
         out = np.flipud(out)
-        return out
+        table = ''
+        for num, row in enumerate(out):
+            for element in row:
+                if type(element) is int:
+                    table += f"{element}".rjust(2, '0').ljust(3)
+                else:
+                    table += f"{element}".ljust(3)
+            if num < 7:
+                table += '\n'
+        return table
+
+    def flip(self):
+        self.flip_state()
+
+    def flip_state(self):
+        """
+        Set layout to match exact situation with reversed colors
+        Returns:
+
+        """
+        self.board = np.flip(self.board)
+        for row in self.board:
+            for figure in row:
+                if type(figure) is not int:
+                    figure.color = 'black' if figure.color == 'white' else 'white'
 
     def make_move(self, pos_from, pos_to):
         valid = self.check_move_rules(pos_from, pos_to)
@@ -92,8 +118,9 @@ class ChessGame:
         target_row = target_pos // 8
         target_col = target_pos % 8
 
-        if self.board[target_row, target_col] and \
-                self.board[row, col].color == self.board[target_row, target_col].color:
+        if type(self.board[target_row, target_col]) != int and \
+                (self.board[row, col].color == self.board[target_row, target_col].color
+                 or self.board[target_row, target_col].fig_type == 'king'):
             return False
 
         figure = self.board[row, col]
