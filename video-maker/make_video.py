@@ -7,7 +7,7 @@ VID_SIZE = (750, 750)
 
 def make_video(dir_path, file_list, video_size):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(f'{dir_path}.mp4', fourcc, 60.0, video_size)
+    out = cv2.VideoWriter(f'{dir_path}.mp4', fourcc, 30.0, video_size)
 
     for file in file_list:
         img_path = os.path.join(dir_path, file)
