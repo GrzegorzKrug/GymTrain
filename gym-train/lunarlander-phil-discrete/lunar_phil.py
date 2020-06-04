@@ -72,7 +72,8 @@ class Agent:
                  dense2=256,
                  dropout_actor=0.2,
                  dropout_critic=0.2,
-                 episode_offset=0):
+                 episode_offset=0,
+                 record_game=False):
 
         dt = datetime.datetime.timetuple(datetime.datetime.now())
         self.runtime_name = f"{dt.tm_mon:>02}-{dt.tm_mday:>02}--" \
@@ -83,7 +84,7 @@ class Agent:
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
-        if settings.ALLOW_TRAIN:
+        if settings.ALLOW_TRAIN and not record_game:
             self.actor_tb = CustomTensorBoard(log_dir=f"tensorlogs/{settings.MODEL_NAME}-{episode_offset}-Actor")
             self.critic_tb = CustomTensorBoard(log_dir=f"tensorlogs/{settings.MODEL_NAME}-{episode_offset}-Critic")
         self.memory = deque(maxlen=settings.MAX_BATCH_SIZE)
@@ -126,8 +127,9 @@ class Agent:
             """RNG based on delta input"""
             out = backend.clip(y_pred, 1e-8, 1 - 1e-8)
             loglike = y_true * backend.log(out)
-            loglike = loglike
-            loss = backend.sum(loglike * delta)
+            # loglike = loglike
+            loss = backend.sum(-loglike * delta)
+            # loss = backend.abs(loss)
             return loss
 
         actor = Model(inputs=[input_layer, delta], outputs=[probs])
@@ -181,8 +183,8 @@ class Agent:
         for ind, act in enumerate(Actions):
             target_actions[ind][act] = 1
 
-        self.critic.fit([Old_states], target, verbose=0, callbacks=[self.critic_tb])
         self.actor.fit([Old_states, delta], target_actions, verbose=0, callbacks=[self.actor_tb])
+        self.critic.fit([Old_states], target, verbose=0, callbacks=[self.critic_tb])
 
     def save_model(self):
         if not settings.SAVE_MODEL:
@@ -346,7 +348,7 @@ def training():
                     for old_s, act, rew, st, don in zip(Old_states, Actions, Rewards, States, Dones):
                         agent.add_memmory((old_s, act, rew, st, don))
                     agent.train()
-                    if not (episode + episode_offset) % 25 and episode > 0:
+                    if not (episode + episode_offset) % 5 and episode > 0:
                         agent.save_model()
                         np.save(f"{settings.MODEL_NAME}/last-episode-num.npy", episode + episode_offset)
 
