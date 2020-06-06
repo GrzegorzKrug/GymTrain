@@ -13,3 +13,8 @@ Both models, actor and critic, share common nodes `Dense1` and `Dense2`
 ### Landing video
 
     link will be here....
+    
+    
+#### Tutorial link
+
+[YT: Machine Learning with Phil](https://www.youtube.com/watch?v=2vJtbAha3To)
