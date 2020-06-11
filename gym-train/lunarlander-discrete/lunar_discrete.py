@@ -6,7 +6,6 @@ import datetime
 import random
 import time
 import gym
-import cv2
 import os
 
 from keras.layers import Dense, Conv2D, MaxPooling2D, Dropout, Flatten, Input, concatenate
@@ -14,8 +13,8 @@ from keras.models import Model, load_model, Sequential
 from keras.initializers import RandomUniform
 from keras.callbacks import TensorBoard
 from keras.utils import plot_model
-from collections import deque
 from keras.optimizers import Adam
+from collections import deque
 from matplotlib import style
 from keras import backend
 
@@ -73,7 +72,8 @@ class Agent:
                  dense2=256,
                  dropout_actor=0.2,
                  dropout_critic=0.2,
-                 episode_offset=0):
+                 episode_offset=0,
+                 record_game=False):
 
         dt = datetime.datetime.timetuple(datetime.datetime.now())
         self.runtime_name = f"{dt.tm_mon:>02}-{dt.tm_mday:>02}--" \
@@ -84,7 +84,7 @@ class Agent:
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
-        if settings.ALLOW_TRAIN:
+        if settings.ALLOW_TRAIN and not record_game:
             self.actor_tb = CustomTensorBoard(log_dir=f"tensorlogs/{settings.MODEL_NAME}-{episode_offset}-Actor")
             self.critic_tb = CustomTensorBoard(log_dir=f"tensorlogs/{settings.MODEL_NAME}-{episode_offset}-Critic")
         self.memory = deque(maxlen=settings.MAX_BATCH_SIZE)
@@ -114,37 +114,36 @@ class Agent:
             self.actor, self.critic, self.policy = self.create_actor_critic_network()
 
     def create_actor_critic_network(self):
-        weights_initializer = RandomUniform(minval=-0.5, maxval=0.5)
-        state_input = Input(shape=self.input_shape)
-        action_input = Input(shape=(1,))
-
+        """Custom Loss function"""
+        "Inputs"
+        input_layer = Input(shape=self.input_shape)
         delta = Input(shape=[1, ])
 
-        def custom_loss(y_true, y_pred):
-            """RNG based on delta input"""
-            out = backend.clip(y_pred, 1e-8, 1 - 1e-8)
-            loglike = y_true * backend.log(out)
-            loglike = loglike * delta
-            # loglike = backend.abs(loglike)
-            loss = backend.sum(loglike)
-            return loss
-
         "Actor"
-        actor_1_dense = Dense(self.dense1, activation='relu', kernel_initializer=weights_initializer)(state_input)
-        actor_2_dense = Dense(self.dense2, activation='relu', kernel_initializer=weights_initializer)(actor_1_dense)
-        probs = Dense(self.action_space, activation='softmax')(actor_2_dense)
+        act_dense1 = Dense(self.dense1, activation='relu')(input_layer)
+        act_drop = Dropout(0.7)(act_dense1)
+        act_dense2 = Dense(self.dense2, activation='relu')(act_drop)
 
         "Critic"
-        critic_inputa = Dense(self.dense1, activation='relu', kernel_initializer=weights_initializer)(state_input)
-        critic_inputb = Dense(self.dense1, activation='relu', kernel_initializer=weights_initializer)(actor_1_dense)
-        merge1 = concatenate([critic_inputa, critic_inputb])
-        critic_dense2 = Dense(self.dense2, activation='relu', kernel_initializer=weights_initializer)(merge1)
-        values = Dense(1, activation='linear', kernel_initializer=weights_initializer)(critic_dense2)
+        crit_dense1 = Dense(500, activation='relu')(input_layer)
+        crit_dense2 = Dense(500, activation='relu')(crit_dense1)
 
-        "Models"
-        actor = Model(inputs=[state_input, delta], outputs=[probs])
-        policy = Model(inputs=[state_input], outputs=[probs])
-        critic = Model(inputs=[state_input, action_input], outputs=[values])
+        'Outputs'
+        probs = Dense(self.action_space, activation='softmax')(act_dense2)
+        values = Dense(1, activation='linear')(crit_dense2)
+
+        "Backend"
+
+        def custom_loss(y_true, y_pred):
+            """Loss based on delta input"""
+            out = backend.clip(y_pred, 1e-8, 1 - 1e-8)
+            loglike = y_true * backend.log(out)
+            loss = backend.sum(-loglike * delta)
+            return loss
+
+        actor = Model(inputs=[input_layer, delta], outputs=[probs])
+        policy = Model(inputs=[input_layer], outputs=[probs])
+        critic = Model(inputs=[input_layer], outputs=[values])
 
         actor.compile(optimizer=Adam(self.alpha), loss=custom_loss, metrics=['accuracy'])
         critic.compile(optimizer=Adam(self.beta), loss='mse', metrics=['accuracy'])
@@ -182,9 +181,9 @@ class Agent:
         Actions = np.array(Actions)
         Dones = np.array(Dones)
 
-        current_critic_value = self.critic.predict([Old_states, Actions]).ravel()
-        future_actions = self.choose_action_list(New_states)
-        future_critic_values = self.critic.predict([New_states, future_actions]).ravel()
+        current_critic_value = self.critic.predict([Old_states]).ravel()
+        # future_actions = self.choose_action_list([New_states])
+        future_critic_values = self.critic.predict([New_states]).ravel()
 
         target = Rewards + self.gamma * future_critic_values * Dones
         delta = target - current_critic_value
@@ -193,7 +192,7 @@ class Agent:
         for ind, act in enumerate(Actions):
             target_actions[ind][act] = 1
 
-        self.critic.fit([Old_states, Actions], target, verbose=0, callbacks=[self.critic_tb])
+        self.critic.fit([Old_states], target, verbose=0, callbacks=[self.critic_tb])
         self.actor.fit([Old_states, delta], target_actions, verbose=0, callbacks=[self.actor_tb])
 
     def save_model(self):
@@ -259,7 +258,9 @@ class Agent:
 
     def train(self):
         """Train model if memory is at minimum size"""
-        if len(self.memory) < settings.MIN_BATCH_SIZE:
+        if not settings.STEP_TRAIN:
+            self.actor_critic_train(list(self.memory))
+        elif len(self.memory) < settings.MIN_BATCH_SIZE:
             return None
         elif len(self.memory) > settings.MAX_BATCH_SIZE:
             data = random.sample(self.memory, settings.MAX_BATCH_SIZE)
@@ -324,9 +325,9 @@ def training():
             step = 0
             All_score = []
             All_steps = []
-            episoze_time = time.time()
+            episode_time = time.time()
             while len(Games):
-                if time.time() - episoze_time > settings.TIMEOUT_AGENT:
+                if time.time() - episode_time > settings.TIMEOUT_AGENT:
                     print(f"Timeout episode {episode}!")
                     stop_loop = True
                 else:
@@ -357,10 +358,8 @@ def training():
                 if settings.ALLOW_TRAIN:
                     for old_s, act, rew, st, don in zip(Old_states, Actions, Rewards, States, Dones):
                         agent.add_memmory((old_s, act, rew, st, don))
-                    agent.train()
-                    if not (episode + episode_offset) % 25 and episode > 0:
-                        agent.save_model()
-                        np.save(f"{settings.MODEL_NAME}/last-episode-num.npy", episode + episode_offset)
+                    if settings.STEP_TRAIN:
+                        agent.train()
 
                 for ind_d in range(len(Games) - 1, -1, -1):
                     if Dones[ind_d] or stop_loop:
@@ -380,13 +379,21 @@ def training():
                         Games.pop(ind_d)
                         States.pop(ind_d)
 
+            if not settings.STEP_TRAIN and settings.ALLOW_TRAIN:
+                agent.train()
+
+            if not (episode + episode_offset) % 5 and episode > 0 and settings.ALLOW_TRAIN:
+                agent.save_model()
+                np.save(f"{settings.MODEL_NAME}/last-episode-num.npy", episode + episode_offset)
+
         except KeyboardInterrupt:
             emergency_break = True
 
         print(f"Step-Ep[{episode + episode_offset:^7} of {settings.EPOCHS + episode_offset}], "
               f"Eps: {eps:>1.3f} "
               f"avg-score: {np.mean(All_score):^8.1f}, "
-              f"avg-steps: {np.mean(All_steps):^7.1f}"
+              f"avg-steps: {np.mean(All_steps):^7.1f}, "
+              f"time-left: {(settings.TRAIN_MAX_MIN_DURATION * 60 - (time.time() - time_start)) / 60:>04.1f} min"
               )
         time_end = time.time()
         if emergency_break:
@@ -395,8 +402,8 @@ def training():
             emergency_break = True
 
     print(f"Run ended: {settings.MODEL_NAME}-{episode_offset}")
-    print(f"Step-Training time elapsed: {(time_end - time_start) / 60:3.1f}m, "
-          f"{(time_end - time_start) / (episode + 1):3.1f} s per episode")
+    print(f"Time elapsed: {(time_end - time_start) / 60:3.1f}m, "
+          f"{(time_end - time_start) / (episode + 1) * 1000 / 60:3.1f} min per 1k epochs")
 
     if settings.ALLOW_TRAIN:
         agent.save_model()
@@ -409,7 +416,7 @@ def moving_average(array, window_size=None, multi_agents=1):
     size = len(array)
 
     if not window_size or window_size and size < window_size:
-        window_size = size // 10
+        window_size = size // 4
 
     if window_size < 1:
         return array
@@ -455,7 +462,7 @@ def plot_results(stats):
     X = range(stats['episode'][0], stats['episode'][-1] + 1)
 
     plt.subplot(311)
-    plt.suptitle(f"{settings.MODEL_NAME}\nStats")
+    plt.suptitle(f"{settings.MODEL_NAME}\nStats - {stats['episode'][0]}")
     plt.scatter(
             np.array(stats['episode']),
             stats['score'],
@@ -479,15 +486,8 @@ def plot_results(stats):
     plt.subplots_adjust(hspace=0.3)
     plt.legend(loc=2)
 
-    # plt.subplot(314)
-    # plt.plot(stats['episode'], stats['eps'], label='eps', color='k')
-    # plt.legend(loc=2)
-
     if settings.SAVE_PICS:
         plt.savefig(f"{settings.MODEL_NAME}/scores-{agent.runtime_name}.png")
-
-    # if not settings.SAVE_PICS:
-    #     plt.show()
 
     if settings.SOUND_ALERT:
         os.system("play -nq -t alsa synth 0.2 sine 550")
