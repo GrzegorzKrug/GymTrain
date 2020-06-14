@@ -121,8 +121,7 @@ class Agent:
 
         "Actor"
         act_dense1 = Dense(self.dense1, activation='relu')(input_layer)
-        act_drop = Dropout(0.7)(act_dense1)
-        act_dense2 = Dense(self.dense2, activation='relu')(act_drop)
+        act_dense2 = Dense(self.dense2, activation='relu')(act_dense1)
 
         "Critic"
         crit_dense1 = Dense(500, activation='relu')(input_layer)

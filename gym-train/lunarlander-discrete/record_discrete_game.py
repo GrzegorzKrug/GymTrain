@@ -47,7 +47,8 @@ def record_game():
         if render:
             Games[0].render()
             array = Games[0].viewer.get_array()
-            cv2.imwrite(f"{settings.MODEL_NAME}/replay-{settings.MODEL_NAME}-{episode_offset}/{step}.png", array[:, :, [2, 1, 0]])
+            cv2.imwrite(f"{settings.MODEL_NAME}/replay-{settings.MODEL_NAME}-{episode_offset}/{step}.png",
+                        array[:, :, [2, 1, 0]])
 
         for ind_d in range(len(Games) - 1, -1, -1):
             if Dones[ind_d]:
@@ -93,3 +94,4 @@ if __name__ == "__main__":
                   episode_offset=episode_offset,
                   record_game=True)
     record_game()
+    print(f"Replay saved: {settings.MODEL_NAME}, episode: {episode_offset}")
