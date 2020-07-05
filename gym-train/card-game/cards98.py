@@ -1,12 +1,12 @@
 from keras.models import Model
 from keras.optimizers import Adam
-from keras.layers import Dense, Dropout, Input
+from keras.layers import Dense, Dropout, Input, concatenate
 from keras import backend as backend
 from keras.callbacks import TensorBoard
 import tensorflow as tf
 
 from collections import deque
-from random import shuffle
+from random import shuffle, sample
 
 import texttable as tt
 import numpy as np
@@ -81,14 +81,24 @@ class GameCards98:
         self.translator = MapIndexesToNum(4, 8)
         self.model = self.create_model()
         self.load_weights()
-        self.batch_index = self.load_batch()
+        self.batch_index, self.plot_num = self.load_config()
 
-        self.tensorboard = CustomTensorBoard(log_dir=f"tensorlogs/{card_settings.MODEL_NAME}", step=self.batch_index)
+        self.tensorboard = CustomTensorBoard(log_dir=f"tensorlogs/{card_settings.MODEL_NAME}-{self.plot_num}",
+                                             step=self.batch_index)
         'Rewards'
-        self.GoodMove = 1
-        self.WrongMove = -10
-        self.SkipMove = 9  # This move + 8 cards in hand
-        self.EndGame = 100
+        self.WIN = 0
+        self.SkipMove = card_settings.SKIP_MOVE
+        self.GoodMove = card_settings.GOOD_MOVE
+        self.EndGame = card_settings.LOST_GAME
+        self.WrongMove = card_settings.INVALID_MOVE
+
+    def load_config(self):
+        batch_index = self.load_batch()
+        plot_num = self.load_plot_num()
+        if batch_index > 50_000:
+            batch_index = 0
+            plot_num += 1
+        return batch_index, plot_num
 
     def _reset(self):
         self.piles = [1, 1, 100, 100]
@@ -103,7 +113,8 @@ class GameCards98:
         self.pile_ind = -1
         self.last_card_played = 0
         self.history = []
-        self.memory = deque(maxlen=10000)
+        self.memory = deque(maxlen=card_settings.MEMOR_MAX_SIZE)
+        self.hand_fill()
 
     def calculate_chance_10(self, cards, round_chance=True):
         """
@@ -150,6 +161,11 @@ class GameCards98:
                 higher_card_chance.append(0)
         return [lower_card_chance, higher_card_chance]
 
+    def conv_piles_to_array(self):
+        out = np.array(self.piles.copy())
+        out = out / 100
+        return out
+
     def conv_dec_to_array(self):
         cards = np.zeros(98, dtype=int)
         for card_index in self.deck:
@@ -157,10 +173,11 @@ class GameCards98:
         return np.array(cards)
 
     def conv_hand_to_array(self):
-        cards = np.zeros(98, dtype=int)
-        for card_index in self.hand:
-            cards[card_index - 2] = 1  # Card '2' is first on list, index 0
-        return np.array(cards)
+        out = np.zeros(8)
+        nums = np.array(self.hand.copy())
+        nums = nums / 100
+        out[:len(nums)] = nums
+        return out
 
     def check_move(self, hand_id, pile_id):
         """
@@ -242,6 +259,7 @@ class GameCards98:
         if self.move_count > self.timeout_turn:
             end_game['timeout'] = True
             end_bool = True
+            self.score_gained = self.EndGame
             return end_game, end_bool
 
         next_move = None
@@ -259,9 +277,11 @@ class GameCards98:
         elif len(self.hand) == 0 and len(self.deck) == 0:
             end_game['win'] = True
             end_bool = True
+            self.score_gained = self.WIN
         else:
             end_game['loss'] = True
             end_bool = True
+            self.score_gained = self.EndGame
 
         return end_game, end_bool
 
@@ -315,21 +335,23 @@ class GameCards98:
         b = round(random.random() * 3) + 1
         return a, b
 
-    def main_loop(self, ai_play=True):
+    def main_loop(self, ai_play=True, eps=0):
         new_state = self.observation()
         train_interval = 0
+
         while True:
             train_interval += 1
-            if not train_interval % 20:
+            if not train_interval % card_settings.TRAIN_EVERY:
                 self.train_model()
 
             old_state = new_state
             self.hand_fill()
+
             if ai_play:
-                if random.random() < card_settings.EPS:
+                if random.random() < eps:
                     action = np.random.randint(0, 32)
                 else:
-                    action = self.ai_predict(old_state)
+                    action = self.predict(old_state)
                 move = self.translator.get_map(action)
             else:
                 self.display_table()
@@ -337,21 +359,22 @@ class GameCards98:
 
             self.play_card(move)
             new_state = self.observation()
-            reward = self.score_gained
             end_dict, end_bool = self.end_condition()
+            reward = self.score_gained
             self.memory_add(old_state, new_state, action, reward, end_bool)
 
             if end_bool:
                 break
-        # if end_dict['loss']:
-        #     print("You have lost")
+
+        print(f"Good moves: {self.turn:<4} eps: {eps:<7.3f} ", end='')
         if end_dict['win']:
             print("=== Win !!! ===")
-        # elif end_dict['timeout']:
-        #     print("Timeout!")
-        # elif end_dict['other']:
-        #     print("Other reason of end")
-        print(f"Good moves: {self.turn}")
+        elif end_dict['timeout']:
+            print("time")
+        elif end_dict['other']:
+            print("Other reason of end")
+        else:
+            print("")
 
     def play_card(self, action):
         """
@@ -450,12 +473,6 @@ class GameCards98:
             file.close()
         self.main_loop(ai_play=False)
 
-    def ai_predict(self, state):
-        """Return single action"""
-        state = np.array(state).reshape(-1, 196)
-        action = np.argmax(self.model.predict(state), axis=1)
-        return action[0]
-
     def load_weights(self):
         if os.path.isfile(f"models/{card_settings.MODEL_NAME}/model"):
             print("Loaded weights")
@@ -477,6 +494,13 @@ class GameCards98:
         else:
             return 0
 
+    def load_plot_num(self):
+        if os.path.isfile(f"models/{card_settings.MODEL_NAME}/plot.npy"):
+            num = np.load(f"models/{card_settings.MODEL_NAME}/plot.npy", allow_pickle=True)
+            return num
+        else:
+            return 0
+
     def save_model(self):
         while True:
             try:
@@ -490,16 +514,25 @@ class GameCards98:
                 break
             except OSError:
                 time.sleep(0.2)
+        while True:
+            try:
+                np.save(f"models/{card_settings.MODEL_NAME}/plot", self.plot_num)
+                break
+            except OSError:
+                time.sleep(0.2)
         return True
 
     def create_model(self):
-        input_layer = Input(shape=(196,))
-        dense1 = Dense(512, activation='relu')(input_layer)
-        dense2 = Dense(512, activation='relu')(dense1)
+        input_layer = Input(shape=(12,))
+
+        dense1 = Dense(1000, activation='relu')(input_layer)
+        drop1 = Dropout(0.01)(dense1)
+        dense2 = Dense(1000, activation='relu')(drop1)
+
         value = Dense(32, activation='linear')(dense2)
         model = Model(inputs=input_layer, outputs=value)
 
-        model.compile(optimizer=Adam(learning_rate=1e-4), loss='mse', metrics=['accuracy'])
+        model.compile(optimizer=Adam(learning_rate=card_settings.ALFA), loss='mse', metrics=['accuracy'])
 
         return model
 
@@ -508,11 +541,15 @@ class GameCards98:
 
     def train_model(self):
         train_data = list(self.memory)
-        if len(train_data) < 1:
+        if len(train_data) < card_settings.MIN_BATCH_SIZE:
             return None
         else:
             self.batch_index += 2
-        self.memory.clear()
+        if card_settings.CLEAR_MEMORY:
+            self.memory.clear()
+
+        if len(train_data) > card_settings.MAX_BATCH_SIZE:
+            train_data = sample(train_data, card_settings.MAX_BATCH_SIZE)
         shuffle(train_data)
 
         old_states = []
@@ -527,22 +564,35 @@ class GameCards98:
             rewards.append(rw)
             dones.append(dn)
 
-        # targets = np.zeros((len(actions), 32))
-        new_states = np.array(new_states)
+        # old_pile, old_hand = np.array(old_states)[:, 0], np.array(old_states)[:, 1]
+        # new_pile, new_hand = np.array(new_states)[:, 0], np.array(new_states)[:, 1]
+        # old_pile = old_pile.reshape(-1, 4)
+        # old_hand = old_hand.reshape(-1, 8)
+        # new_pile = new_pile.reshape(-1, 4)
+        # new_hand = new_hand.reshape(-1, 8)
+
         old_states = np.array(old_states)
+        new_states = np.array(new_states)
 
         current_Qs = self.model.predict(old_states)
         future_maxQ = np.argmax(self.model.predict(new_states), axis=1)
         for index, (act, rew, dn, ft_r) in enumerate(zip(actions, rewards, dones, future_maxQ)):
-            current_Qs[index, act] = rew + ft_r * card_settings.DISCOUNT * (not dn)
+            new_q = rew + ft_r * card_settings.DISCOUNT * int(not dn)
+            current_Qs[index, act] = new_q
 
         self.model.fit(old_states, current_Qs, verbose=0, callbacks=[self.tensorboard])
 
+    def predict(self, state):
+        """Return single action"""
+        state = np.array(state).reshape(-1, *card_settings.INPUT_SHAPE)
+        action = np.argmax(self.model.predict(state), axis=1)
+        return action[0]
+
     def observation(self):
         """Return cards in deck(asumption we know play history) and in hand"""
-        a = self.conv_dec_to_array()
-        b = self.conv_hand_to_array()
-        out = np.concatenate([a, b])
+        piles = self.conv_piles_to_array()
+        hand = self.conv_hand_to_array()
+        out = np.concatenate([piles, hand])
         return out
 
 
@@ -598,9 +648,27 @@ if __name__ == '__main__':
     sess = tf.compat.v1.Session(config=config)
 
     app = GameCards98(timeout_turn=card_settings.GAME_TIMEOUT)
-    for x in range(10000):
+    time_start = time.time()
+    EPS = iter(np.linspace(card_settings.EPS, 0, 100))
+
+    for x in range(card_settings.GAME_NUMBER):
+        if (time.time() - time_start) > card_settings.TRAIN_TIMEOUT:
+            print("Train timeout")
+            break
+
+        try:
+            eps = next(EPS)
+        except StopIteration:
+            EPS = iter(np.linspace(card_settings.EPS, 0, 50))
+            eps = 0
+
         app.reset()
-        app.main_loop()
+        app.main_loop(eps=eps)
+
+        if card_settings.DEBUG:
+            app.train_model()
+            break
         if not x % 25:
             app.save_model()
+
     app.save_model()
