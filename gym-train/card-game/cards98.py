@@ -68,7 +68,7 @@ class GameCards98:
     Input: hand_number, pile number ; Separator is not necessary'
     """
 
-    def __init__(self, timeout_turn=1000):
+    def __init__(self, timeout_turn=1000, layers=(500, 500)):
         """
         self.pile_going_up = [1, 1]
         self.pile_going_down = [100, 100]
@@ -79,10 +79,14 @@ class GameCards98:
         self.timeout_turn = timeout_turn
 
         self.translator = MapIndexesToNum(4, 8)
+        self.batch_index, self.plot_num, self.layers = self.load_config()
+        if self.layers is None:
+            self.layers = layers
+        else:
+            self.layers = [num if num <= 1 else new_num for num, new_num in zip(self.layers, layers)]
+
         self.model = self.create_model()
         self.load_weights()
-        self.batch_index, self.plot_num = self.load_config()
-
         self.tensorboard = CustomTensorBoard(log_dir=f"tensorlogs/{card_settings.MODEL_NAME}-{self.plot_num}",
                                              step=self.batch_index)
         'Rewards'
@@ -98,7 +102,15 @@ class GameCards98:
         if batch_index > 50_000:
             batch_index = 0
             plot_num += 1
-        return batch_index, plot_num
+        layers = self.load_layers()
+        return batch_index, plot_num, layers
+
+    def load_layers(self):
+        if os.path.isfile(f"models/{card_settings.MODEL_NAME}/layers.npy"):
+            layers = np.load(f"models/{card_settings.MODEL_NAME}/layers.npy", allow_pickle=True)
+            return layers
+        else:
+            return None
 
     def _reset(self):
         self.piles = [1, 1, 100, 100]
@@ -366,7 +378,7 @@ class GameCards98:
             if end_bool:
                 break
 
-        print(f"Good moves: {self.turn:<4} eps: {eps:<7.3f} ", end='')
+        print(f"Score: {self.score:>8.0f}    GoodMoves: {self.turn:<4} eps: {eps:<7.3f} ", end='')
         if end_dict['win']:
             print("=== Win !!! ===")
         elif end_dict['timeout']:
@@ -501,7 +513,7 @@ class GameCards98:
         else:
             return 0
 
-    def save_model(self):
+    def save_all(self):
         while True:
             try:
                 self.model.save_weights(f"models/{card_settings.MODEL_NAME}/model")
@@ -520,20 +532,34 @@ class GameCards98:
                 break
             except OSError:
                 time.sleep(0.2)
+        while True:
+            try:
+                np.save(f"models/{card_settings.MODEL_NAME}/layers", self.layers)
+                break
+            except OSError:
+                time.sleep(0.2)
         return True
 
     def create_model(self):
         input_layer = Input(shape=(12,))
-
-        dense1 = Dense(1000, activation='relu')(input_layer)
-        drop1 = Dropout(0.01)(dense1)
-        dense2 = Dense(1000, activation='relu')(drop1)
-
-        value = Dense(32, activation='linear')(dense2)
+        print(f"Creating model: {card_settings.MODEL_NAME}: {self.layers}")
+        last = input_layer
+        for num in self.layers:
+            if 0 < num <= 1:
+                drop = Dropout(num)(last)
+                last = drop
+            elif num > 1:
+                num = int(num)
+                dense = Dense(num, activation='relu')(last)
+                last = dense
+            else:
+                raise ValueError(f"This values is below 0: {num}")
+        value = Dense(32, activation='linear')(last)
         model = Model(inputs=input_layer, outputs=value)
 
         model.compile(optimizer=Adam(learning_rate=card_settings.ALFA), loss='mse', metrics=['accuracy'])
-
+        with open(f"models/{card_settings.MODEL_NAME}/summary.txt", 'w') as file:
+            model.summary(print_fn=lambda x: file.write(x + '\n'))
         return model
 
     def memory_add(self, old_state, new_state, action, reward, done):
@@ -647,7 +673,7 @@ if __name__ == '__main__':
     config.gpu_options.per_process_gpu_memory_fraction = 0.4
     sess = tf.compat.v1.Session(config=config)
 
-    app = GameCards98(timeout_turn=card_settings.GAME_TIMEOUT)
+    app = GameCards98(timeout_turn=card_settings.GAME_TIMEOUT, layers=card_settings.LAYERS)
     time_start = time.time()
     EPS = iter(np.linspace(card_settings.EPS, 0, 100))
 
@@ -669,6 +695,6 @@ if __name__ == '__main__':
             app.train_model()
             break
         if not x % 25:
-            app.save_model()
+            app.save_all()
 
-    app.save_model()
+    app.save_all()
