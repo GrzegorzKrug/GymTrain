@@ -80,15 +80,20 @@ class GameCards98:
 
         self.translator = MapIndexesToNum(4, 8)
         self.batch_index, self.plot_num, self.layers = self.load_config()
+        print(f"Loaded layers: {self.layers}")
         if self.layers is None:
             self.layers = layers
         else:
-            self.layers = [num if num <= 1 else new_num for num, new_num in zip(self.layers, layers)]
+            if len(self.layers) == len(layers):  # update dropout values
+                self.layers = [new_num if num < 1 and new_num < 1 else num for num, new_num in
+                               zip(self.layers, layers)]
 
         self.model = self.create_model()
         self.load_weights()
         self.tensorboard = CustomTensorBoard(log_dir=f"tensorlogs/{card_settings.MODEL_NAME}-{self.plot_num}",
                                              step=self.batch_index)
+        self.memory = deque(maxlen=card_settings.MEMOR_MAX_SIZE)
+
         'Rewards'
         self.WIN = 0
         self.SkipMove = card_settings.SKIP_MOVE
@@ -96,10 +101,27 @@ class GameCards98:
         self.EndGame = card_settings.LOST_GAME
         self.WrongMove = card_settings.INVALID_MOVE
 
+    def _reset(self):
+        self.piles = [1, 1, 100, 100]
+        self.deck = random.sample(range(2, 100), 98)  # 98)
+        self.hand = []
+        self.move_count = 0
+        self.turn = 0
+
+        self.score = 0
+        self.score_gained = 0
+        self.good_moves = 0
+        self.bad_moves = 0
+        self.hand_ind = -1
+        self.pile_ind = -1
+        self.last_card_played = 0
+        self.history = []
+        self.hand_fill()
+
     def load_config(self):
         batch_index = self.load_batch()
         plot_num = self.load_plot_num()
-        if batch_index > 50_000:
+        if batch_index > card_settings.GRAPH_CUT_AT:
             batch_index = 0
             plot_num += 1
         layers = self.load_layers()
@@ -111,22 +133,6 @@ class GameCards98:
             return layers
         else:
             return None
-
-    def _reset(self):
-        self.piles = [1, 1, 100, 100]
-        self.deck = random.sample(range(2, 100), 98)  # 98)
-        self.hand = []
-        self.move_count = 0
-        self.turn = 0
-
-        self.score = 0
-        self.score_gained = 0
-        self.hand_ind = -1
-        self.pile_ind = -1
-        self.last_card_played = 0
-        self.history = []
-        self.memory = deque(maxlen=card_settings.MEMOR_MAX_SIZE)
-        self.hand_fill()
 
     def calculate_chance_10(self, cards, round_chance=True):
         """
@@ -185,11 +191,11 @@ class GameCards98:
         return np.array(cards)
 
     def conv_hand_to_array(self):
-        out = np.zeros(8)
-        nums = np.array(self.hand.copy())
-        nums = nums / 100
-        out[:len(nums)] = nums
-        return out
+        cards = np.zeros((8, 98), dtype=int)
+        for index, card_index in enumerate(self.hand):
+            cards[index, card_index - 2] = 1  # Card '2' is first on list, index 0
+        cards = cards.ravel()
+        return cards
 
     def check_move(self, hand_id, pile_id):
         """
@@ -199,33 +205,41 @@ class GameCards98:
         Used in checking for End Conditions
         Copied from Play Card Method
         """
+        response = {}.fromkeys(['invalid', 'valid', 'skip'], False)
+        valid = False
+
         if hand_id < 0 or hand_id > 7:
-            # print('Error: Invalid hand index')
-            return False
+            "Invalid move"
 
         elif pile_id < 0 or pile_id > 3:
-            # print('Error: Invalid pile index')
-            return False
+            "Invalid move"
 
         elif pile_id == 0 or pile_id == 1:
             try:
-                if self.hand[hand_id] > self.piles[pile_id] or \
-                        self.hand[hand_id] == (self.piles[pile_id] - 10):
-                    return True
-                else:
-                    return False
+                if self.hand[hand_id] > self.piles[pile_id]:
+                    valid = True
+                elif self.hand[hand_id] == (self.piles[pile_id] - 10):
+                    valid = True
+                    response['skip'] = True
             except IndexError:
-                return False
+                "Invalid move"
 
         elif pile_id == 2 or pile_id == 3:
             try:
-                if self.hand[hand_id] < self.piles[pile_id] or \
-                        self.hand[hand_id] == (self.piles[pile_id] + 10):
-                    return True
-                else:
-                    return False
+                if self.hand[hand_id] < self.piles[pile_id]:
+                    valid = True
+                elif self.hand[hand_id] == (self.piles[pile_id] + 10):
+                    valid = True
+                    response['skip'] = True
             except IndexError:
-                return False
+                "Invalid move"
+
+        if valid:
+            response['valid'] = True
+            return True, response
+        else:
+            response['invalid'] = True
+            return False, response
 
     def display_table(self, show_chances=False, show_deck=False):
         """
@@ -258,7 +272,7 @@ class GameCards98:
             hand.add_row(['Higher Card Chance'] + higher_chance_row)
         print(hand.draw())
 
-    def end_condition(self):
+    def end_condition(self, force_end=False):
         """
         Checking end conditions after current move
         Returns:
@@ -267,6 +281,10 @@ class GameCards98:
         """
         end_game = {}.fromkeys(['loss', 'win', 'timeout', 'other'], False)
         end_bool = False
+        if force_end:
+            end_game['other'] = True
+            end_bool = True
+            return end_game, end_bool
 
         if self.move_count > self.timeout_turn:
             end_game['timeout'] = True
@@ -280,7 +298,7 @@ class GameCards98:
                 break
 
             for pile_id in range(4):
-                next_move = self.check_move(hand_id, pile_id)
+                next_move, info = self.check_move(hand_id, pile_id)
                 if next_move:
                     break
 
@@ -294,7 +312,6 @@ class GameCards98:
             end_game['loss'] = True
             end_bool = True
             self.score_gained = self.EndGame
-
         return end_game, end_bool
 
     def get_user_input(self):
@@ -333,7 +350,7 @@ class GameCards98:
         Fill Hand with cards from deck
         Hand is always 8
         """
-        while len(self.hand) < 7 and len(self.deck) > 0:
+        while len(self.hand) < 8 and len(self.deck) > 0:
             self.hand.append(self.deck[0])
             self.deck.pop(0)
         self.hand.sort()
@@ -352,41 +369,52 @@ class GameCards98:
         train_interval = 0
 
         while True:
-            train_interval += 1
-            if not train_interval % card_settings.TRAIN_EVERY:
-                self.train_model()
 
             old_state = new_state
-            self.hand_fill()
 
-            if ai_play:
-                if random.random() < eps:
-                    action = np.random.randint(0, 32)
-                else:
-                    action = self.predict(old_state)
-                move = self.translator.get_map(action)
+            if card_settings.ALLOW_TRAIN and random.random() < eps:
+                action = np.random.randint(0, 32)
             else:
-                self.display_table()
-                move = self.get_user_input()  # Replace user input with NN
+                action = self.predict(old_state)
+            move = self.translator.get_map(action)
 
-            self.play_card(move)
+            if not card_settings.ALLOW_TRAIN:
+                self.display_table()
+                print(move)
+                time.sleep(0.1)
+
+            valid = self.play_card(move)
             new_state = self.observation()
-            end_dict, end_bool = self.end_condition()
-            reward = self.score_gained
+            if valid:
+                end_dict, end_bool = self.end_condition()
+                reward = self.score_gained
+            else:
+                "Move was invalid"
+                end_dict, end_bool = self.end_condition(force_end=True)
+                reward = self.WrongMove
+
             self.memory_add(old_state, new_state, action, reward, end_bool)
 
+            train_interval += 1
             if end_bool:
                 break
 
-        print(f"Score: {self.score:>8.0f}    GoodMoves: {self.turn:<4} eps: {eps:<7.3f} ", end='')
-        if end_dict['win']:
-            print("=== Win !!! ===")
-        elif end_dict['timeout']:
-            print("time")
-        elif end_dict['other']:
-            print("Other reason of end")
-        else:
-            print("")
+        if card_settings.ALLOW_TRAIN:
+            self.train_model()
+
+        if eps < 0.1:
+            if self.move_count - self.turn > 1:
+                print("2! " * 500)
+            print(f"Score: {self.score:>8.1f}    Good/Bad: {self.turn:>3} /{self.move_count - self.turn:>4}  "
+                  f"eps: {eps:<7.3f} ", end='')
+            if end_dict['win']:
+                print("=== Win !!! ===")
+            elif end_dict['timeout']:
+                print("! time !")
+            elif end_dict['other']:
+                print("invalid")
+            else:
+                print("lost")
 
     def play_card(self, action):
         """
@@ -399,63 +427,28 @@ class GameCards98:
         pile_id, hand_id = action
         self.move_count += 1
         self.score_gained = 0  # reset value
+
         try:
-            if hand_id < 0 or hand_id > 7:  # Invalid Hand index
-                print('Error: Invalid hand index')
-                self.score += self.WrongMove
-                self.score_gained = self.WrongMove
-                return False
+            valid, info = self.check_move(hand_id, pile_id)
+            if valid:
+                card = self.hand[hand_id]
+                self.piles[pile_id] = card
+                self.hand.pop(hand_id)
 
-            elif pile_id < 0 or pile_id > 3:  # Invalid Pile index
-                print(f'Error: Invalid pile index: {pile_id}')
-                self.score += self.WrongMove
-                self.score_gained = self.WrongMove
-                return False
+                if info['skip']:
+                    reward = self.SkipMove
+                else:
+                    reward = self.GoodMove
 
-            elif pile_id == 0 or pile_id == 1:  # Rising Piles
-                if self.hand[hand_id] > self.piles[pile_id]:  # Played card is higher
-                    self.piles[pile_id] = self.hand[hand_id]
-                    self.hand.pop(hand_id)
-                    self.score += self.GoodMove
-                    self.score_gained = self.GoodMove
-                    self.turn += 1
-                    return True
-
-                elif self.hand[hand_id] == (self.piles[pile_id] - 10):  # Played card is lower by 10
-                    self.piles[pile_id] = self.hand[hand_id]
-                    self.hand.pop(hand_id)
-                    self.score += self.SkipMove
-                    self.score_gained = self.SkipMove
-                    self.turn += 1
-                    return True
-                else:  # Invalid Move
-                    # print('Not valid move!')
-                    self.score += self.WrongMove
-                    self.score_gained = self.WrongMove
-                    return False
-
-            elif pile_id == 2 or pile_id == 3:  # Lowering Piles
-                if self.hand[hand_id] < self.piles[pile_id]:  # Played card is lower
-                    self.piles[pile_id] = self.hand[hand_id]
-                    self.hand.pop(hand_id)
-                    self.score += self.GoodMove
-                    self.score_gained = self.GoodMove
-                    self.turn += 1
-                    return True
-
-                elif self.hand[hand_id] == (self.piles[pile_id] + 10):  # Played card is higher by 10
-                    self.piles[pile_id] = self.hand[hand_id]
-                    self.hand.pop(hand_id)
-                    self.score += self.SkipMove
-                    self.score_gained = self.SkipMove
-                    return True
-
-                else:  # Invalid Move
-                    self.score += self.WrongMove
-                    self.score_gained = self.WrongMove
-                    return False
+                self.score += reward
+                self.score_gained = reward
+                self.turn += 1
+                self.hand_fill()
+                return True
             else:
-                input('Impossible! How did u get here?!')
+                self.score += self.WrongMove
+                self.score_gained = self.WrongMove
+                return False
 
         except IndexError as ie:
             # print(f'INDEX ERROR: {ie}, {action}, {len(self.hand)}')
@@ -541,7 +534,7 @@ class GameCards98:
         return True
 
     def create_model(self):
-        input_layer = Input(shape=(12,))
+        input_layer = Input(shape=card_settings.INPUT_SHAPE)
         print(f"Creating model: {card_settings.MODEL_NAME}: {self.layers}")
         last = input_layer
         for num in self.layers:
@@ -567,10 +560,12 @@ class GameCards98:
 
     def train_model(self):
         train_data = list(self.memory)
+
         if len(train_data) < card_settings.MIN_BATCH_SIZE:
             return None
         else:
             self.batch_index += 2
+
         if card_settings.CLEAR_MEMORY:
             self.memory.clear()
 
@@ -601,9 +596,11 @@ class GameCards98:
         new_states = np.array(new_states)
 
         current_Qs = self.model.predict(old_states)
-        future_maxQ = np.argmax(self.model.predict(new_states), axis=1)
+        future_maxQ = np.max(self.model.predict(new_states), axis=1)
         for index, (act, rew, dn, ft_r) in enumerate(zip(actions, rewards, dones, future_maxQ)):
             new_q = rew + ft_r * card_settings.DISCOUNT * int(not dn)
+            #     print(new_q, ft_r)
+            #     time.sleep(5)
             current_Qs[index, act] = new_q
 
         self.model.fit(old_states, current_Qs, verbose=0, callbacks=[self.tensorboard])
@@ -694,7 +691,12 @@ if __name__ == '__main__':
         if card_settings.DEBUG:
             app.train_model()
             break
-        if not x % 25:
-            app.save_all()
+        if not card_settings.ALLOW_TRAIN:
+            app.display_table()
+            break
 
+        if not x % 100:
+            app.save_all()
+    print(f"Training end: {card_settings.MODEL_NAME}")
+    print(f"Layers: {app.layers}")
     app.save_all()
