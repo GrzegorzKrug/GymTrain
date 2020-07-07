@@ -14,6 +14,7 @@ import random  # random
 import time
 import json
 import re  # regex
+import sys
 import os
 
 import card_settings
@@ -402,11 +403,12 @@ class GameCards98:
         if card_settings.ALLOW_TRAIN:
             self.train_model()
 
-        if eps < 0.1:
+        if eps < 0.01:
             if self.move_count - self.turn > 1:
                 print("2! " * 500)
-            print(f"Score: {self.score:>8.1f}    Good/Bad: {self.turn:>3} /{self.move_count - self.turn:>4}  "
-                  f"eps: {eps:<7.3f} ", end='')
+            print(
+                    f"'{card_settings.MODEL_NAME}' score: {self.score:>8.1f}    Good/Bad: {self.turn:>3} /{self.move_count - self.turn:>4}  "
+                    f"eps: {eps:<7.3f} ", end='')
             if end_dict['win']:
                 print("=== Win !!! ===")
             elif end_dict['timeout']:
@@ -485,7 +487,8 @@ class GameCards98:
                 try:
                     self.model.load_weights(f"models/{card_settings.MODEL_NAME}/model")
                     break
-                except OSError:
+                except OSError as oe:
+                    print(f"Oe: {oe}")
                     time.sleep(0.2)
             return True
         else:
@@ -507,31 +510,36 @@ class GameCards98:
             return 0
 
     def save_all(self):
-        while True:
-            try:
-                self.model.save_weights(f"models/{card_settings.MODEL_NAME}/model")
-                break
-            except OSError:
-                time.sleep(0.2)
-        while True:
-            try:
-                np.save(f"models/{card_settings.MODEL_NAME}/batch", self.batch_index)
-                break
-            except OSError:
-                time.sleep(0.2)
-        while True:
-            try:
-                np.save(f"models/{card_settings.MODEL_NAME}/plot", self.plot_num)
-                break
-            except OSError:
-                time.sleep(0.2)
-        while True:
-            try:
-                np.save(f"models/{card_settings.MODEL_NAME}/layers", self.layers)
-                break
-            except OSError:
-                time.sleep(0.2)
-        return True
+        try:
+            while True:
+                try:
+                    self.model.save_weights(f"models/{card_settings.MODEL_NAME}/model")
+                    break
+                except OSError:
+                    time.sleep(0.2)
+            while True:
+                try:
+                    np.save(f"models/{card_settings.MODEL_NAME}/batch", self.batch_index)
+                    break
+                except OSError:
+                    time.sleep(0.2)
+            while True:
+                try:
+                    np.save(f"models/{card_settings.MODEL_NAME}/plot", self.plot_num)
+                    break
+                except OSError:
+                    time.sleep(0.2)
+            while True:
+                try:
+                    np.save(f"models/{card_settings.MODEL_NAME}/layers", self.layers)
+                    break
+                except OSError:
+                    time.sleep(0.2)
+            return True
+        except KeyboardInterrupt:
+            print("Keyboard Interrupt: saving again")
+            self.save_all()
+            sys.exit(0)
 
     def create_model(self):
         input_layer = Input(shape=card_settings.INPUT_SHAPE)
@@ -550,7 +558,7 @@ class GameCards98:
         value = Dense(32, activation='linear')(last)
         model = Model(inputs=input_layer, outputs=value)
 
-        model.compile(optimizer=Adam(learning_rate=card_settings.ALFA), loss='mse', metrics=['accuracy'])
+        model.compile(optimizer=Adam(learning_rate=card_settings.ALPHA), loss='mse', metrics=['accuracy'])
         with open(f"models/{card_settings.MODEL_NAME}/summary.txt", 'w') as file:
             model.summary(print_fn=lambda x: file.write(x + '\n'))
         return model
@@ -674,29 +682,36 @@ if __name__ == '__main__':
     time_start = time.time()
     EPS = iter(np.linspace(card_settings.EPS, 0, 100))
 
-    for x in range(card_settings.GAME_NUMBER):
-        if (time.time() - time_start) > card_settings.TRAIN_TIMEOUT:
-            print("Train timeout")
-            break
+    try:
+        for x in range(card_settings.GAME_NUMBER):
+            if (time.time() - time_start) > card_settings.TRAIN_TIMEOUT:
+                print("Train timeout")
+                break
 
-        try:
-            eps = next(EPS)
-        except StopIteration:
-            EPS = iter(np.linspace(card_settings.EPS, 0, 50))
-            eps = 0
+            try:
+                eps = next(EPS)
+            except StopIteration:
+                EPS = iter(np.linspace(card_settings.EPS, 0, 50))
+                eps = 0
 
-        app.reset()
-        app.main_loop(eps=eps)
+            app.reset()
+            app.main_loop(eps=eps)
 
-        if card_settings.DEBUG:
-            app.train_model()
-            break
-        if not card_settings.ALLOW_TRAIN:
-            app.display_table()
-            break
+            if card_settings.DEBUG:
+                app.train_model()
+                break
+            if not card_settings.ALLOW_TRAIN:
+                app.display_table()
+                break
 
-        if not x % 100:
+            # if not x % 100:
+            #     app.save_all()
+    except KeyboardInterrupt:
+        if card_settings.ALLOW_TRAIN:
             app.save_all()
+        print("Keyboard STOP!")
+
     print(f"Training end: {card_settings.MODEL_NAME}")
     print(f"Layers: {app.layers}")
-    app.save_all()
+    if card_settings.ALLOW_TRAIN:
+        app.save_all()
