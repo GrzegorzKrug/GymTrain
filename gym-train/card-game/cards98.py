@@ -479,7 +479,8 @@ class Agent:
         value = Dense(32, activation='linear')(last)
         model = Model(inputs=input_layer, outputs=value)
 
-        model.compile(optimizer=Adam(learning_rate=card_settings.ALPHA), loss='mse', metrics=['accuracy'])
+        model.compile(optimizer=Adam(learning_rate=card_settings.ALPHA), loss=card_settings.LOSSFN,
+                      metrics=['accuracy'])
         with open(f"models/{card_settings.MODEL_NAME}/summary.txt", 'w') as file:
             model.summary(print_fn=lambda x: file.write(x + '\n'))
         return model
@@ -500,6 +501,7 @@ class Agent:
 
         if len(train_data) > card_settings.MAX_BATCH_SIZE:
             train_data = sample(train_data, card_settings.MAX_BATCH_SIZE)
+        shuffle(train_data)
 
         old_states = []
         new_states = []
@@ -529,7 +531,7 @@ class Agent:
             new_q = rew + ft_r * card_settings.DISCOUNT * int(not dn)
             current_Qs[index, act] = new_q
 
-        self.model.fit(old_states, current_Qs, verbose=0, callbacks=[self.tensorboard])
+        self.model.fit(old_states, current_Qs, shuffle=False, batch_size=50, verbose=0, callbacks=[self.tensorboard])
 
     def predict(self, state):
         """Return single action"""
@@ -602,7 +604,7 @@ def train_model():
     trans = MapIndexesToNum(4, 8)
     time_start = time.time()
     time_save = time.time()
-    EPS = iter(np.linspace(card_settings.EPS, 0, 100))
+    EPS = iter(np.linspace(card_settings.EPS, 0, card_settings.EPS_INTERVAL))
     try:
         for episode in range(episode_offset, card_settings.GAME_NUMBER + episode_offset):
 
@@ -612,7 +614,7 @@ def train_model():
             try:
                 eps = next(EPS)
             except StopIteration:
-                EPS = iter(np.linspace(card_settings.EPS, 0, 50))
+                EPS = iter(np.linspace(card_settings.EPS, 0, card_settings.EPS_INTERVAL))
                 eps = 0
 
             Games = []  # Close screen
@@ -675,7 +677,8 @@ def train_model():
                       f"avg-score: {np.mean(All_score):>6.2f}, "
                       f"worst-game: {np.min(All_score):>6.1f}, "
                       f"avg-good-move: {np.mean(All_steps):>4.1f}, "
-                      f"best-moves: {np.max(All_steps):>4}, "
+                      f"best-moves: {np.max(All_steps):>3}, "
+                      f"worst-moves: {np.min(All_steps):>2}, "
 
                       f"eps: {eps:<5.2f}")
             if time.time() - card_settings.SAVE_INTERVAL > time_save:
@@ -703,10 +706,11 @@ def show_game():
     agent = Agent(layers=card_settings.LAYERS)
     trans = MapIndexesToNum(4, 8)
     game = GameCards98(timeout_turn=card_settings.GAME_TIMEOUT)
-    states = [game.reset()]
+    new_state = game.reset()
     done = False
 
     while not done:
+        states = [new_state]
         game.display_table()
         action = agent.predict(states)[0]
         move = trans.get_map(action)
