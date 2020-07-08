@@ -431,7 +431,6 @@ class Agent:
 
     def save_all(self):
         try:
-            print("Saved all.")
             while True:
                 try:
                     self.model.save_weights(f"models/{card_settings.MODEL_NAME}/model")
@@ -456,6 +455,7 @@ class Agent:
                     break
                 except OSError:
                     time.sleep(0.2)
+            print("Saved all.")
             return True
         except KeyboardInterrupt:
             print("Keyboard Interrupt: saving again")
@@ -527,8 +527,6 @@ class Agent:
         future_maxQ = np.max(self.model.predict(new_states), axis=1)
         for index, (act, rew, dn, ft_r) in enumerate(zip(actions, rewards, dones, future_maxQ)):
             new_q = rew + ft_r * card_settings.DISCOUNT * int(not dn)
-            #     print(new_q, ft_r)
-            #     time.sleep(5)
             current_Qs[index, act] = new_q
 
         self.model.fit(old_states, current_Qs, verbose=0, callbacks=[self.tensorboard])
@@ -603,6 +601,7 @@ def train_model():
     agent = Agent(layers=card_settings.LAYERS)
     trans = MapIndexesToNum(4, 8)
     time_start = time.time()
+    time_save = time.time()
     EPS = iter(np.linspace(card_settings.EPS, 0, 100))
     try:
         for episode in range(episode_offset, card_settings.GAME_NUMBER + episode_offset):
@@ -672,9 +671,16 @@ def train_model():
                 agent.train_model()
             episode += 1
             if eps < 0.1:
-                print(f"'{card_settings.MODEL_NAME}' avg-score: {np.mean(All_score):>6.2f}, "
-                      f"avg-good-move: {np.mean(All_steps):<4.1f}, "
+                print(f"'{card_settings.MODEL_NAME}' "
+                      f"avg-score: {np.mean(All_score):>6.2f}, "
+                      f"worst-game: {np.min(All_score):>6.1f}, "
+                      f"avg-good-move: {np.mean(All_steps):>4.1f}, "
+                      f"best-moves: {np.max(All_steps):>4}, "
+
                       f"eps: {eps:<5.2f}")
+            if time.time() - card_settings.SAVE_INTERVAL > time_save:
+                time_save = time.time()
+                agent.save_all()
 
     except KeyboardInterrupt:
         if card_settings.ALLOW_TRAIN:
@@ -688,5 +694,31 @@ def train_model():
         np.save(f"models/{card_settings.MODEL_NAME}/last-episode-num.npy", episode)
 
 
+def show_game():
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.allow_growth = True
+    config.gpu_options.per_process_gpu_memory_fraction = 0.4
+    sess = tf.compat.v1.Session(config=config)
+
+    agent = Agent(layers=card_settings.LAYERS)
+    trans = MapIndexesToNum(4, 8)
+    game = GameCards98(timeout_turn=card_settings.GAME_TIMEOUT)
+    states = [game.reset()]
+    done = False
+
+    while not done:
+        game.display_table()
+        action = agent.predict(states)[0]
+        move = trans.get_map(action)
+        pile, hand = move
+        print(f"Move: {hand + 1} -> {pile + 1}")
+        rew, new_state, done, info = game.step(move)
+    print(info)
+
+
 if __name__ == '__main__':
-    train_model()
+    if card_settings.ALLOW_TRAIN:
+        train_model()
+        print(f"Learning rate: {card_settings.ALPHA}")
+    else:
+        show_game()
