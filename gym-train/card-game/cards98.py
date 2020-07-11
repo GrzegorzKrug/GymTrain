@@ -5,15 +5,15 @@ from keras import backend as backend
 from keras.callbacks import TensorBoard
 import tensorflow as tf
 
-from collections import deque
+from matplotlib import pyplot as plt
+from matplotlib import style
 from random import shuffle, sample
+from collections import deque
 
 import texttable as tt
 import numpy as np
 import random  # random
 import time
-import json
-import re  # regex
 import sys
 import os
 
@@ -501,7 +501,8 @@ class Agent:
 
         if len(train_data) > card_settings.MAX_BATCH_SIZE:
             train_data = sample(train_data, card_settings.MAX_BATCH_SIZE)
-        shuffle(train_data)
+        else:
+            shuffle(train_data)
 
         old_states = []
         new_states = []
@@ -531,7 +532,7 @@ class Agent:
             new_q = rew + ft_r * card_settings.DISCOUNT * int(not dn)
             current_Qs[index, act] = new_q
 
-        self.model.fit(old_states, current_Qs, shuffle=False, batch_size=50, verbose=0, callbacks=[self.tensorboard])
+        self.model.fit(old_states, current_Qs, shuffle=False, batch_size=card_settings.BATCH_SIZE, verbose=0, callbacks=[self.tensorboard])
 
     def predict(self, state):
         """Return single action"""
@@ -695,6 +696,74 @@ def train_model():
     if card_settings.ALLOW_TRAIN:
         agent.save_all()
         np.save(f"models/{card_settings.MODEL_NAME}/last-episode-num.npy", episode)
+        plot_stats(stats)
+
+
+def moving_average(array, window_size=None, multi_agents=1):
+    size = len(array)
+
+    if not window_size or window_size and size < window_size:
+        window_size = size // 4
+
+    if window_size < 1:
+        return array
+
+    while len(array) % window_size or window_size % multi_agents:
+        window_size -= 1
+        if window_size < 1:
+            window_size = 1
+            break
+
+    output = []
+
+    for sample_num in range(multi_agents - 1, len(array), multi_agents):
+        if sample_num < window_size:
+            output.append(np.mean(array[:sample_num + 1]))
+        else:
+            output.append(np.mean(array[sample_num - window_size: sample_num + 1]))
+
+    if len(array) % window_size:
+        output.append(np.mean(array[-window_size:]))
+
+    return output
+
+
+def plot_stats(stats):
+    directory = f"models/{card_settings.MODEL_NAME}"
+    plot_name = str(int(time.time()))
+
+    print(f"Ploting to {directory}: {plot_name}")
+    os.makedirs(directory, exist_ok=True)
+    plt.figure(figsize=(16, 9))
+    style.use('ggplot')
+    plt.figure(figsize=(20, 11))
+    X = range(stats['episode'][0], stats['episode'][-1] + 1)
+
+    plt.subplot(211)
+    plt.suptitle(f"{card_settings.MODEL_NAME}\nStats - {stats['episode'][0]}")
+    plt.scatter(
+            np.array(stats['episode']),
+            stats['score'],
+            alpha=0.25, marker='s', c='b', s=10, label="Score"
+    )
+
+    plt.plot(X, moving_average(stats['score'], multi_agents=card_settings.SIM_COUNT), label='Average', linewidth=3)
+    plt.legend(loc=2)
+
+    plt.subplot(212)
+    plt.scatter(stats['episode'], stats['good_moves'], label='Good_moves', color='b', marker='s', s=10, alpha=0.25)
+    plt.plot(X, moving_average(stats['good_moves'], multi_agents=card_settings.SIM_COUNT), label='Average',
+             linewidth=3)
+    plt.legend(loc=2)
+
+    # plt.subplot(313)
+    # effectiveness = [score / moves for score, moves in zip(stats['score'], stats['flighttime'])]
+    # plt.scatter(stats['episode'], effectiveness, label='Effectiveness', color='b', marker='o', s=10, alpha=0.5)
+    # plt.plot(X, moving_average(effectiveness, multi_agents=card_settings.SIM_COUNT), label='Average', linewidth=3)
+    plt.xlabel("Episode")
+    plt.subplots_adjust(hspace=0.3)
+
+    plt.savefig(f"{directory}/{plot_name}.png")
 
 
 def show_game():
