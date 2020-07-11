@@ -530,9 +530,11 @@ class Agent:
         future_maxQ = np.max(self.model.predict(new_states), axis=1)
         for index, (act, rew, dn, ft_r) in enumerate(zip(actions, rewards, dones, future_maxQ)):
             new_q = rew + ft_r * card_settings.DISCOUNT * int(not dn)
+            cq = current_Qs[index, act]
             current_Qs[index, act] = new_q
 
-        self.model.fit(old_states, current_Qs, shuffle=False, batch_size=card_settings.BATCH_SIZE, verbose=0, callbacks=[self.tensorboard])
+        self.model.fit(old_states, current_Qs, shuffle=False, batch_size=card_settings.BATCH_SIZE, verbose=0,
+                       callbacks=[self.tensorboard])
 
     def predict(self, state):
         """Return single action"""
@@ -633,7 +635,12 @@ def train_model():
             while len(Games):
                 step += 1
                 Old_states = np.array(States)
-                if eps > np.random.random():
+                if step <= card_settings.EPS_BIAS:
+                    this_step_eps = eps / card_settings.EPS_DIVIDE
+                else:
+                    this_step_eps = eps
+
+                if this_step_eps > np.random.random():
                     Actions = np.random.randint(0, card_settings.ACTION_SPACE, size=(len(Old_states)))
                 else:
                     Actions = agent.predict(Old_states)
@@ -696,14 +703,16 @@ def train_model():
     if card_settings.ALLOW_TRAIN:
         agent.save_all()
         np.save(f"models/{card_settings.MODEL_NAME}/last-episode-num.npy", episode)
-        plot_stats(stats)
+        if card_settings.PLOT_AFTER:
+            plot_stats(stats)
 
 
 def moving_average(array, window_size=None, multi_agents=1):
     size = len(array)
-
-    if not window_size or window_size and size < window_size:
-        window_size = size // 4
+    if size < 100:
+        window_size = size - 1
+    elif not window_size or window_size and size < window_size:
+        window_size = size // 10
 
     if window_size < 1:
         return array
@@ -713,9 +722,8 @@ def moving_average(array, window_size=None, multi_agents=1):
         if window_size < 1:
             window_size = 1
             break
-
     output = []
-
+    print(f"Window size: {window_size}")
     for sample_num in range(multi_agents - 1, len(array), multi_agents):
         if sample_num < window_size:
             output.append(np.mean(array[:sample_num + 1]))
@@ -724,7 +732,6 @@ def moving_average(array, window_size=None, multi_agents=1):
 
     if len(array) % window_size:
         output.append(np.mean(array[-window_size:]))
-
     return output
 
 
@@ -732,26 +739,43 @@ def plot_stats(stats):
     directory = f"models/{card_settings.MODEL_NAME}"
     plot_name = str(int(time.time()))
 
-    print(f"Ploting to {directory}: {plot_name}")
     os.makedirs(directory, exist_ok=True)
     plt.figure(figsize=(16, 9))
     style.use('ggplot')
     plt.figure(figsize=(20, 11))
+
+    l1, l2, l3 = len(stats['episode']), len(stats['good_moves']), len(stats['score'])
+    norm_len = np.min([l1, l2, l3])
+    while len(stats['score']) > norm_len or len(stats['score']) % card_settings.SIM_COUNT:
+        stats['score'].pop(-1)
+        print("poping score")
+    while len(stats['good_moves']) > norm_len or len(stats['good_moves']) % card_settings.SIM_COUNT:
+        stats['good_moves'].pop(-1)
+        print("poping moves")
+    while len(stats['episode']) > norm_len or len(stats['episode']) % card_settings.SIM_COUNT:
+        stats['episode'].pop(-1)
+        print("poping episode")
     X = range(stats['episode'][0], stats['episode'][-1] + 1)
 
+    num = l1
+    alfa = 0.3
+    while num // 10000:
+        num = num / 10
+        alfa = alfa / 3
+    print(f"Plot alfa: {alfa}, amount: {l1}")
+    print(f"Ploting to {directory}: {plot_name}")
     plt.subplot(211)
     plt.suptitle(f"{card_settings.MODEL_NAME}\nStats - {stats['episode'][0]}")
-    plt.scatter(
-            np.array(stats['episode']),
-            stats['score'],
-            alpha=0.25, marker='s', c='b', s=10, label="Score"
-    )
+    plt.scatter(np.array(stats['episode']),
+                stats['score'],
+                alpha=alfa, marker='s', c='b', s=10, label="Score"
+                )
 
     plt.plot(X, moving_average(stats['score'], multi_agents=card_settings.SIM_COUNT), label='Average', linewidth=3)
     plt.legend(loc=2)
 
     plt.subplot(212)
-    plt.scatter(stats['episode'], stats['good_moves'], label='Good_moves', color='b', marker='s', s=10, alpha=0.25)
+    plt.scatter(stats['episode'], stats['good_moves'], label='Good_moves', color='b', marker='s', s=10, alpha=alfa)
     plt.plot(X, moving_average(stats['good_moves'], multi_agents=card_settings.SIM_COUNT), label='Average',
              linewidth=3)
     plt.legend(loc=2)
