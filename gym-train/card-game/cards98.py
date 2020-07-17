@@ -610,7 +610,6 @@ def train_model():
     EPS = iter(np.linspace(card_settings.EPS, 0, card_settings.EPS_INTERVAL))
     try:
         for episode in range(episode_offset, card_settings.GAME_NUMBER + episode_offset):
-
             if (time.time() - time_start) > card_settings.TRAIN_TIMEOUT:
                 print("Train timeout")
                 break
@@ -635,7 +634,9 @@ def train_model():
             while len(Games):
                 step += 1
                 Old_states = np.array(States)
-                if step <= card_settings.EPS_BIAS:
+                if card_settings.EPS_PROGRESIVE:
+                    this_step_eps = eps * step
+                elif step <= card_settings.EPS_BIAS:
                     this_step_eps = eps / card_settings.EPS_DIVIDE
                 else:
                     this_step_eps = eps
@@ -677,11 +678,15 @@ def train_model():
                         Games.pop(ind_d)
                         States.pop(ind_d)
 
+            if card_settings.ALLOW_TRAIN and card_settings.FEED_WINNER_CHANCE > np.random.random():
+                for x in range(card_settings.FEED_AMOUNT):
+                    agent.add_memmory(*feed_winner())
+
             if card_settings.ALLOW_TRAIN and not episode % card_settings.TRAIN_EVERY:
                 agent.train_model()
-            episode += 1
-            if eps < 0.1:
-                print(f"'{card_settings.MODEL_NAME}' "
+
+            if eps < 0.01:
+                print(f"'{card_settings.MODEL_NAME}-{agent.plot_num}' "
                       f"avg-score: {np.mean(All_score):>6.2f}, "
                       f"worst-game: {np.min(All_score):>6.1f}, "
                       f"avg-good-move: {np.mean(All_steps):>4.1f}, "
@@ -698,41 +703,60 @@ def train_model():
             agent.save_all()
         print("Keyboard STOP!")
 
-    print(f"Training end: {card_settings.MODEL_NAME}")
-    print(f"Layers: {agent.layers}")
+    duration = (time.time() - time_start) / 60
+    print(f"Train durations: {duration:<6.2f}m, per 1k games: {duration * 1000 / (episode - episode_offset):<6.2f}m")
+
     if card_settings.ALLOW_TRAIN:
         agent.save_all()
         np.save(f"models/{card_settings.MODEL_NAME}/last-episode-num.npy", episode)
+
+        print(f"Training end: {card_settings.MODEL_NAME}")
+        print("\nPARAMS:")
+        print(f"Learning rate: {card_settings.ALPHA}")
+        print(f"BATCH_SIZE: {card_settings.BATCH_SIZE}")
+        print(f"MIN_BATCH_SIZE: {card_settings.MIN_BATCH_SIZE}")
+        print(f"MAX_BATCH_SIZE: {card_settings.MAX_BATCH_SIZE}")
+        print(f"MEMOR_MAX_SIZE: {card_settings.MEMOR_MAX_SIZE}")
+        print("")
+        # print(f"EPS_BIAS: {card_settings.EPS_BIAS}")
+        # print(f"EPS_DIVIDE: {card_settings.EPS_DIVIDE}")
+        # print(f"SIM_COUNT: {card_settings.SIM_COUNT}")
+        # print(f"EPS_DIVIDE: {card_settings.EPS_DIVIDE}")
+        # print(f"EPS_DIVIDE: {card_settings.EPS_DIVIDE}")
+
+        print(f"Layers: {agent.layers}")
         if card_settings.PLOT_AFTER:
             plot_stats(stats)
 
 
-def moving_average(array, window_size=None, multi_agents=1):
-    size = len(array)
-    if size < 100:
-        window_size = size - 1
-    elif not window_size or window_size and size < window_size:
-        window_size = size // 10
+def moving_average(X, array, tail=1):
+    size1 = len(X)
+    size2 = len(array)
+    tail = size1 // 10
+    x_groups = list(set(X))
+    print("Tail len:", tail)
+    out = []
+    last_ind = 0
+    for group_ind, group_x in enumerate(x_groups):
+        values = []
+        for this_ind in range(last_ind, size1):
+            if X[this_ind] == group_x:
+                values.append(array[this_ind])
+            else:
+                break
+        tail_ind = last_ind - tail
+        if tail_ind > 0:
+            values += array[tail_ind:last_ind]
 
-    if window_size < 1:
-        return array
-
-    while len(array) % window_size or window_size % multi_agents:
-        window_size -= 1
-        if window_size < 1:
-            window_size = 1
-            break
-    output = []
-    print(f"Window size: {window_size}")
-    for sample_num in range(multi_agents - 1, len(array), multi_agents):
-        if sample_num < window_size:
-            output.append(np.mean(array[:sample_num + 1]))
         else:
-            output.append(np.mean(array[sample_num - window_size: sample_num + 1]))
+            values += array[0:last_ind]
+        last_ind = this_ind + 1
+        if len(values) > 0:
+            out.append(np.mean(values))
+        else:
+            print(f"Values are empty, grouping by: {group_x}, {group_ind}")
 
-    if len(array) % window_size:
-        output.append(np.mean(array[-window_size:]))
-    return output
+    return out
 
 
 def plot_stats(stats):
@@ -742,20 +766,31 @@ def plot_stats(stats):
     os.makedirs(directory, exist_ok=True)
     plt.figure(figsize=(16, 9))
     style.use('ggplot')
-    plt.figure(figsize=(20, 11))
 
     l1, l2, l3 = len(stats['episode']), len(stats['good_moves']), len(stats['score'])
     norm_len = np.min([l1, l2, l3])
+
     while len(stats['score']) > norm_len or len(stats['score']) % card_settings.SIM_COUNT:
         stats['score'].pop(-1)
-        print("poping score")
+        # print("poping score")
     while len(stats['good_moves']) > norm_len or len(stats['good_moves']) % card_settings.SIM_COUNT:
         stats['good_moves'].pop(-1)
-        print("poping moves")
+        # print("poping moves")
     while len(stats['episode']) > norm_len or len(stats['episode']) % card_settings.SIM_COUNT:
         stats['episode'].pop(-1)
-        print("poping episode")
+        # print("poping episode")
+    while stats['episode'][-1] % 100 and len(stats['episode']) > 100 or len(stats['episode']) > norm_len:
+        stats['score'].pop(-1)
+        stats['good_moves'].pop(-1)
+        stats['episode'].pop(-1)
+
+    while len(stats['episode']) > 5_000 * card_settings.SIM_COUNT:
+        stats['score'] = stats['score'][::10]
+        stats['good_moves'] = stats['good_moves'][::10]
+        stats['episode'] = stats['episode'][::10]
+
     X = range(stats['episode'][0], stats['episode'][-1] + 1)
+    l1, l2, l3 = len(stats['episode']), len(stats['good_moves']), len(stats['score'])
 
     num = l1
     alfa = 0.3
@@ -771,12 +806,12 @@ def plot_stats(stats):
                 alpha=alfa, marker='s', c='b', s=10, label="Score"
                 )
 
-    plt.plot(X, moving_average(stats['score'], multi_agents=card_settings.SIM_COUNT), label='Average', linewidth=3)
+    plt.plot(X, moving_average(stats['episode'], stats['score']), label='Average', linewidth=3)
     plt.legend(loc=2)
 
     plt.subplot(212)
     plt.scatter(stats['episode'], stats['good_moves'], label='Good_moves', color='b', marker='s', s=10, alpha=alfa)
-    plt.plot(X, moving_average(stats['good_moves'], multi_agents=card_settings.SIM_COUNT), label='Average',
+    plt.plot(X, moving_average(stats['episode'], stats['good_moves']), label='Average',
              linewidth=3)
     plt.legend(loc=2)
 
@@ -786,8 +821,49 @@ def plot_stats(stats):
     # plt.plot(X, moving_average(effectiveness, multi_agents=card_settings.SIM_COUNT), label='Average', linewidth=3)
     plt.xlabel("Episode")
     plt.subplots_adjust(hspace=0.3)
-
     plt.savefig(f"{directory}/{plot_name}.png")
+    plt.savefig(f"models/{card_settings.MODEL_NAME}.png")
+
+
+def float_range(start, stop, step):
+    num = start
+    i = 0
+    while num <= stop:
+        yield num
+        i += 1
+        num = step * i + start
+
+
+def create_heat_map(X, Y, compress_x=1, compress_y=1):
+    y_precision = 1
+    if compress_x < 1:
+        compress_x = 1
+
+    if compress_y < 1:
+        compress_y = 1
+
+    x_range = list(set(X))
+    y_range = list(float_range(np.min(Y), np.max(Y), y_precision))
+    x_offset = np.min(x_range)
+    y_offset = np.min(y_range)
+    sizey = int(len(y_range) // compress_y) + 1
+    sizex = int(len(x_range) // compress_x) + 1
+    heat_map = np.zeros((sizey, sizex))
+
+    for x, y in zip(X, Y):
+        y = int((np.round(y) - y_offset) // compress_y)
+        x = int((x - x_offset) // compress_x)
+        try:
+            val = heat_map[y, x] + 0.2
+            if val > 1:
+                val = 1
+            heat_map[y, x] = val
+        except IndexError as ie:
+            print(f"{ie}")
+            continue
+
+    heat_map = np.flipud(heat_map)
+    return heat_map
 
 
 def show_game():
@@ -801,6 +877,7 @@ def show_game():
     game = GameCards98(timeout_turn=card_settings.GAME_TIMEOUT)
     new_state = game.reset()
     done = False
+    info = None
 
     while not done:
         states = [new_state]
@@ -813,9 +890,25 @@ def show_game():
     print(info)
 
 
+def feed_winner():
+    game = GameCards98()
+    game.piles = np.random.randint(2, 100, 4)
+    game.deck = []
+    card = np.random.randint(2, 100)
+    while card in game.piles:
+        card = np.random.randint(2, 100)
+    game.hand = [card]
+    action = np.random.randint(0, card_settings.ACTION_SPACE)
+    tra = MapIndexesToNum(4, 8)
+    old_state = game.observation()
+    move = tra.get_map(action)
+    reward, new_state, done, info = game.step(move)
+    return old_state, new_state, action, reward, done
+
+
 if __name__ == '__main__':
     if card_settings.ALLOW_TRAIN:
         train_model()
-        print(f"Learning rate: {card_settings.ALPHA}")
+
     else:
         show_game()
