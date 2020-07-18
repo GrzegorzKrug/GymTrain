@@ -2,6 +2,7 @@ from keras.models import Model
 from keras.optimizers import Adam
 from keras.layers import Dense, Dropout, Input, concatenate
 from keras import backend as backend
+from keras.losses import huber_loss, logcosh
 from keras.callbacks import TensorBoard
 import tensorflow as tf
 
@@ -280,6 +281,7 @@ class GameCards98:
             info['win'] = True
             end_bool = True
             reward = self.WIN
+            # print(f"Win!")
         else:
             info['loss'] = True
             end_bool = True
@@ -478,8 +480,34 @@ class Agent:
                 raise ValueError(f"This values is below 0: {num}")
         value = Dense(32, activation='linear')(last)
         model = Model(inputs=input_layer, outputs=value)
+        if card_settings.LOSSFN == 'huber':
+            loss = huber_loss
 
-        model.compile(optimizer=Adam(learning_rate=card_settings.ALPHA), loss=card_settings.LOSSFN,
+        elif card_settings.LOSSFN == 'logcosh':
+            loss = logcosh
+
+        elif card_settings.LOSSFN == 'logsqr':
+            def log_sqr_loss(y_true, y_pred):
+                diff = y_true - y_pred
+                diff = backend.abs(diff + 1e-8)
+                loss = backend.clip(backend.log(diff) / 3, -2, 1) + (diff ** 2)
+                return loss
+
+            loss = log_sqr_loss
+
+        elif card_settings.LOSSFN == 'logabs':
+            def log_abs_loss(y_true, y_pred):
+                diff = y_true - y_pred
+                diff = backend.abs(diff + 1e-8)
+                loss = backend.clip(backend.log(diff), -2, 1) / 3 + diff
+                return loss
+
+            loss = log_abs_loss
+
+        else:
+            loss = card_settings.LOSSFN
+
+        model.compile(optimizer=Adam(learning_rate=card_settings.ALPHA), loss=loss,
                       metrics=['accuracy'])
         with open(f"models/{card_settings.MODEL_NAME}/summary.txt", 'w') as file:
             model.summary(print_fn=lambda x: file.write(x + '\n'))
@@ -643,8 +671,10 @@ def train_model():
 
                 if this_step_eps > np.random.random():
                     Actions = np.random.randint(0, card_settings.ACTION_SPACE, size=(len(Old_states)))
+                    was_random_move = True
                 else:
                     Actions = agent.predict(Old_states)
+                    was_random_move = False
                 Dones = []
                 Rewards = []
                 States = []
@@ -652,6 +682,8 @@ def train_model():
                 for g_index, game in enumerate(Games):
                     move = trans.get_map(Actions[g_index])
                     reward, state, done, info = game.step(action=move)
+                    if not reward:
+                        print(f"WINNDER!!!! {reward}")
                     Rewards.append(reward)
                     Scores[g_index] += reward
                     Dones.append(done)
@@ -661,7 +693,8 @@ def train_model():
                     for old_s, act, rew, n_st, dn in zip(Old_states, Actions, Rewards, States, Dones):
                         agent.add_memmory(old_s, n_st, act, rew, dn)
                     if card_settings.STEP_TRAIN:
-                        agent.train_model()
+                        for x in range(card_settings.TRAIN_AMOUNT):
+                            agent.train_model()
 
                 for ind_d in range(len(Games) - 1, -1, -1):
                     if Dones[ind_d]:
@@ -669,10 +702,11 @@ def train_model():
                         All_score.append(Scores[ind_d])
                         All_steps.append(Games[ind_d].move_count)
 
-                        stats['episode'].append(episode + episode_offset)
-                        stats['eps'].append(eps)
-                        stats['score'].append(Scores[ind_d])
-                        stats['good_moves'].append(step)
+                        if not was_random_move:
+                            stats['episode'].append(episode + episode_offset)
+                            stats['eps'].append(eps)
+                            stats['score'].append(Scores[ind_d])
+                            stats['good_moves'].append(step)
 
                         Scores.pop(ind_d)
                         Games.pop(ind_d)
@@ -687,10 +721,12 @@ def train_model():
 
             if eps < 0.01:
                 print(f"'{card_settings.MODEL_NAME}-{agent.plot_num}' "
-                      f"avg-score: {np.mean(All_score):>6.2f}, "
-                      f"worst-game: {np.min(All_score):>6.1f}, "
-                      f"avg-good-move: {np.mean(All_steps):>4.1f}, "
+                      f"best-score: {np.max(All_score):>6.1f}, "
+                      f"avg-score: {np.mean(All_score):>6.2f}, "                      
+                      f"worst-score: {np.min(All_score):>6.1f}, "
+                      
                       f"best-moves: {np.max(All_steps):>3}, "
+                      f"avg-moves: {np.round(np.mean(All_steps)):>3.0f}, "                      
                       f"worst-moves: {np.min(All_steps):>2}, "
 
                       f"eps: {eps:<5.2f}")
@@ -729,36 +765,6 @@ def train_model():
             plot_stats(stats)
 
 
-def moving_average(X, array, tail=1):
-    size1 = len(X)
-    size2 = len(array)
-    tail = size1 // 10
-    x_groups = list(set(X))
-    print("Tail len:", tail)
-    out = []
-    last_ind = 0
-    for group_ind, group_x in enumerate(x_groups):
-        values = []
-        for this_ind in range(last_ind, size1):
-            if X[this_ind] == group_x:
-                values.append(array[this_ind])
-            else:
-                break
-        tail_ind = last_ind - tail
-        if tail_ind > 0:
-            values += array[tail_ind:last_ind]
-
-        else:
-            values += array[0:last_ind]
-        last_ind = this_ind + 1
-        if len(values) > 0:
-            out.append(np.mean(values))
-        else:
-            print(f"Values are empty, grouping by: {group_x}, {group_ind}")
-
-    return out
-
-
 def plot_stats(stats):
     directory = f"models/{card_settings.MODEL_NAME}"
     plot_name = str(int(time.time()))
@@ -784,23 +790,27 @@ def plot_stats(stats):
         stats['good_moves'].pop(-1)
         stats['episode'].pop(-1)
 
-    while len(stats['episode']) > 5_000 * card_settings.SIM_COUNT:
-        stats['score'] = stats['score'][::10]
-        stats['good_moves'] = stats['good_moves'][::10]
-        stats['episode'] = stats['episode'][::10]
+    while len(stats['episode']) > 300_000:
+        print(f"Reducing data samples from: {len(stats['episode'])}")
+        stats['score'] = stats['score'][::2]
+        stats['good_moves'] = stats['good_moves'][::2]
+        stats['episode'] = stats['episode'][::2]
 
     X = range(stats['episode'][0], stats['episode'][-1] + 1)
     l1, l2, l3 = len(stats['episode']), len(stats['good_moves']), len(stats['score'])
 
     num = l1
     alfa = 0.3
-    while num // 10000:
+    while num // 20000:
         num = num / 10
-        alfa = alfa / 3
-    print(f"Plot alfa: {alfa}, amount: {l1}")
+        alfa = alfa / 1.7
+
     print(f"Ploting to {directory}: {plot_name}")
+    print(f"Plot alfa: {alfa}, amount: {l1}")
+    print(f"Data size: {l1}, {l2}, {l3}")
+
     plt.subplot(211)
-    plt.suptitle(f"{card_settings.MODEL_NAME}\nStats - {stats['episode'][0]}")
+    plt.suptitle(f"{card_settings.MODEL_NAME}\nStats - {stats['episode'][0]}\nNon random moves")
     plt.scatter(np.array(stats['episode']),
                 stats['score'],
                 alpha=alfa, marker='s', c='b', s=10, label="Score"
@@ -808,12 +818,14 @@ def plot_stats(stats):
 
     plt.plot(X, moving_average(stats['episode'], stats['score']), label='Average', linewidth=3)
     plt.legend(loc=2)
+    plt.ylim([card_settings.INVALID_MOVE*1.2, -50])
 
     plt.subplot(212)
     plt.scatter(stats['episode'], stats['good_moves'], label='Good_moves', color='b', marker='s', s=10, alpha=alfa)
     plt.plot(X, moving_average(stats['episode'], stats['good_moves']), label='Average',
              linewidth=3)
     plt.legend(loc=2)
+    plt.ylim([5, 75])
 
     # plt.subplot(313)
     # effectiveness = [score / moves for score, moves in zip(stats['score'], stats['flighttime'])]
@@ -823,6 +835,35 @@ def plot_stats(stats):
     plt.subplots_adjust(hspace=0.3)
     plt.savefig(f"{directory}/{plot_name}.png")
     plt.savefig(f"models/{card_settings.MODEL_NAME}.png")
+
+
+def moving_average(X, array, tail=1):
+    size1 = len(X)
+    size2 = len(array)
+    tail = size1 // 10
+    x_groups = list(set(X))
+    out = []
+    last_ind = 0
+    for group_ind, group_x in enumerate(x_groups):
+        values = []
+        for this_ind in range(last_ind, size1):
+            if X[this_ind] == group_x:
+                values.append(array[this_ind])
+            else:
+                break
+        tail_ind = last_ind - tail
+        if tail_ind > 0:
+            values += array[tail_ind:last_ind]
+        else:
+            values += array[0:last_ind]
+        last_ind = this_ind + 1
+        if len(values) > 0:
+            out.append(np.mean(values))
+        else:
+            print(f"Values are empty, Group X: {group_x}, X[this]: {X[this_ind]}")
+            out.append(array[this_ind])
+
+    return out
 
 
 def float_range(start, stop, step):
